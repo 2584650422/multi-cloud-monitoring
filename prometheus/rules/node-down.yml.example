@@ -1,0 +1,12 @@
+# PLANNED: rename to node-down.yml only after Alertmanager and alert flow are tested.
+groups:
+  - name: node.rules
+    rules:
+      - alert: NodeDown
+        expr: up{job=~".*-node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance_name }} scrape failed"
+          description: "{{ $labels.instance }} has been unreachable for more than 2 minutes."

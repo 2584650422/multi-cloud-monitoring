@@ -1,0 +1,8 @@
+# PLANNED: Alertmanager is not deployed. Never commit real SMTP passwords or webhook tokens.
+global: {}
+
+route:
+  receiver: placeholder
+
+receivers:
+  - name: placeholder

@@ -1,0 +1,77 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    network_mode: host
+    user: "65534:65534"
+    volumes:
+      - type: bind
+        source: /data/docker/monitoring/prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: false
+          selinux: Z
+      - /data/docker/monitoring/prometheus/rules:/etc/prometheus/rules:ro,Z
+      - /data/docker/monitoring/prometheus/targets:/etc/prometheus/targets:ro,Z
+      - /data/docker/monitoring/prometheus/data:/prometheus:Z
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        read_only: true
+        bind:
+          create_host_path: false
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.listen-address=127.0.0.1:9090
+      - --web.enable-lifecycle
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  grafana:
+    image: grafana/grafana:13.2.0
+    container_name: grafana
+    hostname: grafana
+    restart: unless-stopped
+    network_mode: host
+    user: "472:0"
+    depends_on:
+      - prometheus
+    environment:
+      GF_PATHS_CONFIG: /etc/grafana/grafana.ini
+      GF_PATHS_DATA: /var/lib/grafana
+      GF_PATHS_LOGS: /var/log/grafana
+      GF_PATHS_PLUGINS: /var/lib/grafana/plugins
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - type: bind
+        source: /data/docker/monitoring/grafana/grafana.ini
+        target: /etc/grafana/grafana.ini
+        read_only: true
+        bind:
+          create_host_path: false
+          selinux: Z
+      - /data/docker/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro,Z
+      - /data/docker/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro,Z
+      - /data/docker/monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro,Z
+      - /data/docker/monitoring/grafana/provisioning/plugins:/etc/grafana/provisioning/plugins:ro,Z
+      - /data/docker/monitoring/grafana/data:/var/lib/grafana:Z
+      - /data/docker/monitoring/grafana/logs:/var/log/grafana:Z
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        read_only: true
+        bind:
+          create_host_path: false
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"

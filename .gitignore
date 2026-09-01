@@ -1,0 +1,28 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+wg*.conf
+
+# Runtime data
+prometheus/data/
+prometheus/date/
+grafana/data/
+grafana/logs/
+grafana/plugins/
+*.db
+*.log
+
+# Backups and temporary files
+*.bak
+*.backup
+*.tmp
+*~
+.DS_Store
+
+# Editor files
+.idea/
+.vscode/
