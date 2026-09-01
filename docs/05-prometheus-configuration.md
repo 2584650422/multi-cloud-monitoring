@@ -52,15 +52,26 @@ Prometheus 自监控：
     cloud: tencent
     env: test
     private_ip: 172.18.0.6
-    instance_name: tc-test-node-01
+    host: tc-test-node-01
 ```
 
 - `10.250.0.101`：WireGuard Overlay 地址，Prometheus 实际通过它采集。
 - `172.18.0.6`：腾讯 VPC 中真实私网地址，只作为识别标签，不参与这次路由。
 - `cloud`、`env`：用于 Grafana 过滤和告警路由。
-- `instance_name`：给人阅读的稳定名称。当前名称是脱敏基线，TODO：用生产资产清单中的真实规范名称替换。
+- `host`：给人阅读的稳定资产名称。当前名称是脱敏基线，TODO：用生产资产清单中的真实规范名称替换。
 
-不要把公网 IP 当作 `instance_name`。路由地址、云私网地址和展示名称应各司其职。
+`instance` 不在 target labels 中手工覆盖。Prometheus 自动把真实采集 endpoint 写成 `instance="10.250.0.101:9100"`；`host` 承担可读名称。不要把公网 IP 当作 `host`。
+
+当前标准标签只保留：
+
+```text
+host        人类可读的资产名称
+cloud       aliyun / tencent
+env         prod / test
+private_ip  云 VPC 私网地址
+```
+
+`wg_ip` 已能从 `instance` 得到，`public_ip` 不参与 Dashboard 筛选且可能变化，`instance_name` 与 `host` 重复，因此不保留。Node Exporter 的 `nodename` 是操作系统 hostname，也不替代资产名称。
 
 ## 增加腾讯 Target
 
@@ -73,7 +84,7 @@ Prometheus 自监控：
     cloud: tencent
     env: prod
     private_ip: 10.0.8.15
-    instance_name: tc-prod-node-01
+    host: tc-prod-node-01
 ```
 
 部署到宿主机后，先检查完整配置，不要直接重启。

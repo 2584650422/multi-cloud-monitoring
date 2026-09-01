@@ -11,11 +11,14 @@
 | DONE | 腾讯测试节点 Node Exporter 仅监听 `10.250.0.101:9100` |
 | DONE | 阿里 Prometheus 成功采集 `10.250.0.101:9100`，`up == 1` |
 | DONE | `prom/prometheus:v3.13.2` 的 promtool 配置检查 |
-| IN PROGRESS | Prometheus、Grafana Docker Compose 迁移 |
-| IN PROGRESS | Grafana Prometheus datasource provisioning 排查 |
+| DONE | Prometheus、Grafana Docker Compose 已运行 |
+| DONE | Grafana Prometheus datasource provisioning 自动创建成功 |
+| DONE | Grafana Explore 查询 `up` 正常，Node Exporter Full 1860 已导入并显示数据 |
+| DONE | Dashboard 1860 已完成 Cloud / Env / Job / Host 级联变量优化 |
+| IN PROGRESS | 将生产 `host` 从公网 IP 派生命名改为标准资产名称 |
 | PLANNED | 全量节点、Dashboard 标准化、告警、Alertmanager、Blackbox、云监控 API、GitOps/CI |
 
-> 仓库中的 Compose 是根据已确认目录和参数整理的部署基线。当前工作区没有生产机原始配置，容器化迁移仍为 IN PROGRESS，不能把这些文件视为“生产已验证”。
+> 仓库中的 Compose 是根据已确认目录和参数整理的部署基线。生产容器链路已运行验证，但当前工作区没有从生产机直接导出的原始 Compose；仍需逐项核对仓库基线与生产文件是否完全一致。
 
 ## Architecture
 
@@ -53,6 +56,7 @@ docker compose up -d
 - [Prometheus 配置](docs/05-prometheus-configuration.md)
 - [Grafana 配置](docs/06-grafana-configuration.md)
 - [Operations Runbook](docs/07-operations-runbook.md)
+- [Dashboard 优化](docs/08-dashboard-optimization.md)
 - [故障案例库](docs/troubleshooting.md)
 - [路线图](docs/roadmap.md)
 - [架构决策记录](docs/decisions/)

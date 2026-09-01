@@ -4,4 +4,4 @@
     cloud: tencent
     env: test
     private_ip: 172.18.0.6
-    instance_name: tc-test-node-01
+    host: tc-test-node-01

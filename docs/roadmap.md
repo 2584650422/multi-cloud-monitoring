@@ -9,9 +9,9 @@
 
 ## IN PROGRESS
 
-- 核对生产机 Compose、bind mount 和实际目录。
-- 完成 Prometheus / Grafana 容器运行与持久化验证。
-- 定位 Grafana Prometheus datasource provisioning 未生效问题。
+- 将生产 target 中由公网 IP 派生的 `host` 改为稳定资产名称。
+- 导出并脱敏 Dashboard 1860 JSON，纳入 provisioning/Git。
+- 验证 Grafana 数据恢复流程。
 - 将经过脱敏和验证的配置纳入 Git。
 
 ## PLANNED

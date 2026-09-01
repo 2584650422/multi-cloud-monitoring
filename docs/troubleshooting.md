@@ -116,11 +116,11 @@ docker run --rm \
 
 ## Case 3：Grafana datasource provisioning 未生效
 
-- Status: Investigating
-- Root Cause: 尚未确认
-- Resolution: 尚未确认
+- Status: Closed / Not an incident
+- Root Cause: 操作时看错了 Grafana 数据源列表；provisioning 实际已经成功创建 Prometheus datasource。
+- Resolution: 未修改配置。在 Grafana UI 中确认数据源存在，并通过 Explore 查询 `up` 验证连通性。
 
-不能仅凭 UI 未显示就判断是 YAML、mount、路径或网络问题。按以下顺序收集证据。
+本次不需要修复，但保留以下标准证据链。以后不能仅凭 UI 第一眼未显示就判断是 YAML、mount、路径或网络问题。
 
 ### 1. 宿主机文件
 
@@ -193,7 +193,7 @@ docker compose restart grafana
 docker compose logs --tail=200 grafana
 ```
 
-待取得上述证据后，再补充本案例的 Root Cause 与 Resolution。
+本案例的关键经验是：先确认 UI、Explore 和容器内 provisioning 事实，再决定是否修改声明式配置；不要因为误判删除可复现的数据源配置。
 
 ## 通用：容器启动失败
 

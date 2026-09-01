@@ -50,4 +50,4 @@ Prometheus 使用 host network 是为了直接复用宿主机 `wg0` 路由，避
 
 ## 当前边界
 
-Prometheus/Grafana Compose 与 datasource provisioning 尚未完成生产验证。告警系统、探测系统和云厂商 API 仍为 PLANNED，不属于当前已运行架构。
+Prometheus/Grafana Compose、datasource provisioning、Explore 查询和 Dashboard 1860 已验证。Dashboard 标签与变量标准化正在实施；告警系统、探测系统和云厂商 API 仍为 PLANNED。

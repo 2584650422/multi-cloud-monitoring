@@ -5,7 +5,7 @@
 - [grafana/grafana.ini](../grafana/grafana.ini)
 - [datasource provisioning](../grafana/provisioning/datasources/prometheus.yml)
 
-Grafana Compose 和 datasource provisioning 当前状态为 IN PROGRESS / Investigating。
+Grafana Compose 已运行，datasource provisioning 已验证成功。Grafana Explore 查询 `up` 正常，Node Exporter Full Dashboard 1860 已能显示指标。
 
 ## 为什么 Grafana 也使用 host network
 
@@ -115,7 +115,7 @@ docker compose logs --tail=200 grafana
 up
 ```
 
-当前事故仍标记 `Status: Investigating`。只有采集到宿主机、mount、环境变量和日志证据后，才能在故障案例中补 Root Cause 与 Resolution。
+本项目曾误以为 datasource 未生效，随后在 Grafana UI 中确认它已由 provisioning 正常创建，因此没有删除或修改 provisioning。相关排查命令继续保留，供后续恢复与故障定位使用。
 
 ## 数据位置
 

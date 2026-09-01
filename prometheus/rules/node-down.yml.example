@@ -8,5 +8,5 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.instance_name }} scrape failed"
+          summary: "{{ $labels.host }} scrape failed"
           description: "{{ $labels.instance }} has been unreachable for more than 2 minutes."

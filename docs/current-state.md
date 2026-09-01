@@ -21,6 +21,12 @@
 7. `prom/prometheus:v3.13.2` 镜像已成功拉取。
 8. 主配置 `/etc/prometheus/prometheus.yml` 已通过 `promtool check config`。
 9. 曾因主配置副本误放进 `rules/` 导致规则校验失败，原因已定位。
+10. Prometheus 与 Grafana Compose 已运行，Grafana 可以登录。
+11. Prometheus datasource 已通过 Grafana provisioning 自动创建。
+12. Grafana Explore 查询 `up` 正常。
+13. Node Exporter Full Dashboard 1860 已导入并正常显示。
+14. Dashboard 已建立 `Cloud -> Env -> Job -> Host` 级联变量。
+15. 隐藏变量 `node` 已把所选 Host 映射回 `10.250.0.101:9100`，原 1860 Panel 恢复数据。
 
 ## 已纳入仓库但尚未生产验证
 
@@ -34,8 +40,8 @@
 
 - 当前生产机上的原始 `docker-compose.yml` 与仓库基线是否完全一致。
 - Prometheus、Grafana 容器是否已正式启动并稳定运行。
-- Grafana datasource provisioning 当前仍为 Investigating。
-- Grafana Dashboard 与持久化恢复是否已验证。
+- 生产 Prometheus 当前返回的 `host` 仍由腾讯公网 IP 派生；为避免在 Git 中保存公网地址，此处不记录原值。需改为稳定资产名称。
+- Grafana 持久化恢复是否已验证。
 - Prometheus 数据目录实际使用 `data/` 还是误写的 `date/`。
 - 其余阿里云、腾讯云服务器是否已接入。
 - Alertmanager、Blackbox Exporter 和云厂商指标采集。
