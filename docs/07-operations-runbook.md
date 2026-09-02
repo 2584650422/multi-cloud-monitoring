@@ -79,6 +79,19 @@ ping -c 4 10.250.0.101
 
 目标路由必须指向 `wg0`。`latest handshake` 应在有流量时更新，transfer 应双向增长。
 
+### Gateway 新增下游节点
+
+先在 Jenkins 验证 `TARGET_IP:9100`，再修改阿里 Hub Peer 的 `AllowedIPs`。配置变更后优先热加载：
+
+```bash
+wg syncconf wg0 <(wg-quick strip wg0)
+wg show
+ip route replace 172.18.0.0/16 dev wg0   # 仅在阿里 Hub，按实际网段调整
+ip route get 172.18.0.10
+```
+
+`syncconf` 不会自动增加路由；接口不存在或必须重建时才在维护窗口执行 `wg-quick down wg0 && wg-quick up wg0`。生产转发规则先按一台节点的 TCP/9100 精确匹配，保持 FORWARD DROP。完整命令见 [`02-wireguard-gateway.md`](02-wireguard-gateway.md)。
+
 ## Node Exporter
 
 腾讯测试节点：
@@ -89,6 +102,14 @@ journalctl -u node_exporter -n 100 --no-pager
 ss -lntp | grep 9100
 curl -fsS http://10.250.0.101:9100/metrics | head
 ```
+
+以上 `10.250.0.101:9100` 仅适用于点对点 WireGuard 测试。Gateway 后的生产节点应将 systemd 的 `--web.listen-address` 改为该节点 VPC 私网 `IP:9100`，然后在 Jenkins 上验证：
+
+```bash
+curl -fsS http://TARGET_PRIVATE_IP:9100/metrics | head
+```
+
+不要改成 `0.0.0.0:9100`；它会在所有 IPv4 接口监听。Node Exporter 监听地址变更后，依次执行 `systemctl daemon-reload`、`systemctl restart node_exporter`，再进行 Gateway 的路由、FORWARD/SNAT 和 Prometheus target 变更。
 
 ## 修改 Prometheus 配置
 
@@ -187,7 +208,7 @@ docker compose start grafana
 
 ### Prometheus 数据
 
-不要直接复制运行中的 WAL。可在启用 admin API 并评估安全风险后使用 TSDB snapshot，或使用支持一致性快照的存储。当前 Compose 未启用 admin API，因此生产 TSDB 备份方案为 TODO；恢复前必须验证快照完整性。
+不要直接复制运行中的 WAL。可在启用 admin API 并评估安全风险后使用 TSDB snapshot，或使用支持一致性快照的存储。仓库 Compose 默认未启用 admin API；若要使用 snapshot，必须先完成安全评估、启用该 API 并验证恢复流程。
 
 ## 镜像升级
 

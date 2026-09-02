@@ -5,7 +5,7 @@
 - [grafana/grafana.ini](../grafana/grafana.ini)
 - [datasource provisioning](../grafana/provisioning/datasources/prometheus.yml)
 
-Grafana Compose 已运行，datasource provisioning 已验证成功。Grafana Explore 查询 `up` 正常，Node Exporter Full Dashboard 1860 已能显示指标。
+本文说明 Grafana Compose、Prometheus datasource provisioning 与验证步骤。具体环境的执行结果和 Dashboard UI 调整记录保存在 [实施记录](records/README.md)。
 
 ## 为什么 Grafana 也使用 host network
 

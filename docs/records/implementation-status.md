@@ -1,6 +1,6 @@
 # 已验证现状
 
-更新时间：2026-09-01
+更新时间：2026-09-02
 
 本文只记录对话中明确执行并验证成功的事实，不代表当前生产机的实时审计结果。
 
@@ -16,7 +16,7 @@
 2. Overlay 地址为阿里端 `10.250.0.1`、腾讯测试端 `10.250.0.101`。
 3. 两端 Overlay 地址双向 Ping 正常。
 4. WireGuard 外层传输使用 UDP 51820。
-5. 腾讯测试机上的 Node Exporter 可通过隧道地址 `10.250.0.101:9100` 访问，未直接对公网开放 9100。
+5. 腾讯测试机上的 Node Exporter `1.11.1` 可通过隧道地址 `10.250.0.101:9100` 访问，未直接对公网开放 9100。
 6. Prometheus 已采集该 Target，`up == 1`。
 7. `prom/prometheus:v3.13.2` 镜像已成功拉取。
 8. 主配置 `/etc/prometheus/prometheus.yml` 已通过 `promtool check config`。
@@ -27,6 +27,14 @@
 13. Node Exporter Full Dashboard 1860 已导入并正常显示。
 14. Dashboard 已建立 `Cloud -> Env -> Job -> Host` 级联变量。
 15. 隐藏变量 `node` 已把所选 Host 映射回 `10.250.0.101:9100`，原 1860 Panel 恢复数据。
+
+## Gateway 最新进度
+
+- Jenkins Gateway 试点地址规划为 Overlay `10.250.0.102/32`、腾讯 VPC 私网 `172.18.20.16`。
+- 阿里 Hub ↔ Jenkins 的 WireGuard 隧道已按对话记录建立并完成 Overlay 连通验证。
+- 生产网段 `172.18.0.0/16` 的转发、FORWARD、SNAT 和生产 Node Exporter 采集尚未完成端到端验证。
+- Gateway 模式下已明确：生产节点 Node Exporter 应监听各自 VPC 私网 `IP:9100`；`10.250.0.101:9100` 仅代表已验证的点对点测试模式。
+- 尚未对生产安全组、iptables 或 Node Exporter 执行变更；仓库只保存脱敏模板和试点步骤。
 
 ## 已纳入仓库但尚未生产验证
 

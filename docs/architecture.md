@@ -1,53 +1,56 @@
-# 当前架构
+# 架构
 
-## 目标
+本项目以阿里云监控 Hub 为中心采集多云 Linux 主机指标。WireGuard 只承载跨云监控流量；Node Exporter 的 TCP/9100 不直接暴露公网。
 
-以阿里云监控机作为中心，通过 WireGuard 加密隧道采集腾讯云主机指标，避免直接向公网暴露 Node Exporter。
+## 组件与职责
 
-## 已验证架构
+| 组件 | 部署位置 | 职责 |
+| --- | --- | --- |
+| WireGuard | 宿主机 | 建立跨云加密 Overlay，并提供到腾讯目标的路由 |
+| Node Exporter | 被监控主机宿主机 | 暴露 Linux 主机指标 |
+| Prometheus | 阿里监控 Hub 的 Docker Compose | 抓取、存储与查询指标 |
+| Grafana | 阿里监控 Hub 的 Docker Compose | 展示与查询 Prometheus 数据 |
+| WireGuard Gateway | 腾讯 VPC 内指定主机 | 将 WireGuard 监控流量转发到 VPC 下游节点 |
 
-```text
-Alibaba Cloud                         Tencent Cloud
+Prometheus 和 Grafana 使用 `network_mode: host`。Prometheus 因此共享宿主机路由表，直接经 `wg0` 访问跨云 target；Grafana 通过 `http://127.0.0.1:9090` 访问仅绑定 loopback 的 Prometheus。
 
-Prometheus                            Test host
-172.16.90.17                          172.18.0.6
-     |                                     |
-     | wg0: 10.250.0.1                     | wg0: 10.250.0.101
-     +========= WireGuard UDP 51820 =======+
-                                           |
-                                           +-- Node Exporter TCP 9100
-```
+## 两种采集拓扑
 
-数据方向：
+### 点对点
 
-```text
-Prometheus -> wg0 -> WireGuard -> 10.250.0.101:9100 -> Node Exporter
-```
-
-## 组件职责
-
-- WireGuard：提供跨云加密 Overlay 网络。
-- Node Exporter：导出腾讯测试主机的 Linux 系统指标。
-- Prometheus：主动抓取并存储指标。
-
-## 容器化迁移设计（IN PROGRESS）
+适合少量、分散或无法通过同一 VPC Gateway 覆盖的节点。
 
 ```text
-Host network namespace
-
-Grafana :3000
-    |
-    | http://127.0.0.1:9090
-    v
-Prometheus :9090
-    |
-    | route: 10.250.0.101 dev wg0
-    v
-WireGuard -> Node Exporter :9100
+Alibaba monitoring Hub                 Tencent node
+Prometheus                              Node Exporter
+wg0 10.250.0.1 ===== UDP 51820 =====>  wg0 10.250.0.101
+                                             └─ 10.250.0.101:9100
 ```
 
-Prometheus 使用 host network 是为了直接复用宿主机 `wg0` 路由，避免在 Docker bridge 中额外维护 NAT、FORWARD 和路由。Grafana 同样使用 host network，才能用 loopback 访问只监听 `127.0.0.1:9090` 的 Prometheus。代价是端口直接占用宿主机且网络隔离降低。
+腾讯节点本身安装 WireGuard，Node Exporter 绑定该节点的 WireGuard 地址。Prometheus target 是 `10.250.0.101:9100`。
 
-## 当前边界
+### Gateway
 
-Prometheus/Grafana Compose、datasource provisioning、Explore 查询和 Dashboard 1860 已验证。Dashboard 标签与变量标准化正在实施；告警系统、探测系统和云厂商 API 仍为 PLANNED。
+适合同一腾讯 VPC 或可由一个 VPC 节点访问的一组主机。
+
+```text
+Alibaba monitoring Hub             Tencent VPC Gateway              Downstream node
+Prometheus                         wg0 10.250.0.102                 Node Exporter
+wg0 10.250.0.1 ===== UDP 51820 ==> eth0 172.18.20.16 === VPC ===>   172.18.0.28:9100
+                                     FORWARD + SNAT
+```
+
+下游节点不需要 WireGuard，也不分配 `10.250.0.x`。Prometheus target 使用下游节点的 VPC 私网地址；Gateway 仅允许阿里 Hub 到指定节点 TCP/9100 的转发，并将源地址 SNAT 为 Gateway 私网 IP。
+
+## 端口与流量
+
+```text
+Prometheus -> TCP/9100 -> wg0 -> WireGuard 加密 -> UDP/51820 Internet
+           -> Gateway（仅 Gateway 模式） -> TCP/9100 -> Node Exporter
+```
+
+- UDP/51820 是 WireGuard 外层传输端口，安全组需开放 UDP，而不是 TCP。
+- TCP/9100 是内部指标端口；点对点模式仅在 WireGuard 地址监听，Gateway 模式仅在节点 VPC 私网地址监听。
+- `0.0.0.0:9100` 会监听所有 IPv4 接口，不作为本项目的默认安全策略。
+
+部署细节见 [网络设计](network.md)、[WireGuard 安装](02-wireguard-installation.md)、[Gateway 部署](02-wireguard-gateway.md) 和 [Node Exporter 安装](03-node-exporter-installation.md)。

@@ -8,4 +8,4 @@ WireGuard 与 Node Exporter 保持宿主机部署；Prometheus、Grafana 以及�
 
 ## 影响
 
-配置和运行数据需要明确分离，并在实际容器启动、持久化与恢复验证后再把实施状态改为 DONE。
+配置和运行数据需要明确分离；容器启动、持久化与恢复验证的执行事实记录在 `docs/records/`，不写入本 ADR。

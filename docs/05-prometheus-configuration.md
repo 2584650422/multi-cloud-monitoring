@@ -1,6 +1,6 @@
 # Prometheus Configuration
 
-实际仓库配置为 [prometheus/prometheus.yml](../prometheus/prometheus.yml)，腾讯测试节点清单为 [prometheus/targets/tencent-node.yml](../prometheus/targets/tencent-node.yml)。Compose 迁移仍为 IN PROGRESS。
+实际仓库配置为 [prometheus/prometheus.yml](../prometheus/prometheus.yml)，目标清单示例为 [prometheus/targets/tencent-node.yml](../prometheus/targets/tencent-node.yml)。
 
 ## 主配置结构
 
@@ -43,7 +43,7 @@ Prometheus 自监控：
 
 `job_name` 会成为 `job` 标签。file_sd 把节点清单与采集策略分开，新增主机时不必继续扩大主配置。
 
-## 当前 Target 与标签
+## 点对点 Target 示例与标签
 
 ```yaml
 - targets:
@@ -58,7 +58,7 @@ Prometheus 自监控：
 - `10.250.0.101`：WireGuard Overlay 地址，Prometheus 实际通过它采集。
 - `172.18.0.6`：腾讯 VPC 中真实私网地址，只作为识别标签，不参与这次路由。
 - `cloud`、`env`：用于 Grafana 过滤和告警路由。
-- `host`：给人阅读的稳定资产名称。当前名称是脱敏基线，TODO：用生产资产清单中的真实规范名称替换。
+- `host`：给人阅读的稳定资产名称。按资产命名规范维护，不使用公网 IP 或临时 hostname。
 
 `instance` 不在 target labels 中手工覆盖。Prometheus 自动把真实采集 endpoint 写成 `instance="10.250.0.101:9100"`；`host` 承担可读名称。不要把公网 IP 当作 `host`。
 
@@ -73,19 +73,35 @@ private_ip  云 VPC 私网地址
 
 `wg_ip` 已能从 `instance` 得到，`public_ip` 不参与 Dashboard 筛选且可能变化，`instance_name` 与 `host` 重复，因此不保留。Node Exporter 的 `nodename` 是操作系统 hostname，也不替代资产名称。
 
-## 增加腾讯 Target
+## 增加 Target
 
-先规划新的、不冲突的 WireGuard `/32` 地址并完成隧道和 Node Exporter 验证，再编辑 `prometheus/targets/tencent-node.yml`：
+按采集拓扑选择 target 地址。点对点节点先规划新的、不冲突的 WireGuard `/32` 地址并完成隧道与 Node Exporter 验证；Gateway 下游节点则使用自己的腾讯 VPC 私网地址。
+
+### 点对点节点
 
 ```yaml
 - targets:
-    - 10.250.0.102:9100
+    - 10.250.0.103:9100
   labels:
     cloud: tencent
     env: prod
     private_ip: 10.0.8.15
     host: tc-prod-node-01
 ```
+
+### Gateway 下游节点
+
+```yaml
+- targets:
+    - 172.18.0.28:9100
+  labels:
+    cloud: tencent
+    env: prod
+    private_ip: 172.18.0.28
+    host: tc-prod-node-28
+```
+
+`10.250.0.102` 是 Gateway 自身的 Overlay 地址，不是下游节点的 target。Gateway 路由、FORWARD 与 SNAT 的配置顺序见 [WireGuard Gateway 部署](02-wireguard-gateway.md)。
 
 部署到宿主机后，先检查完整配置，不要直接重启。
 
@@ -142,7 +158,7 @@ curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22tencent-node%2
 curl -fsS 'http://127.0.0.1:9090/api/v1/targets?state=active'
 ```
 
-当前已验证目标应返回 `up == 1`。若为 0，检查 API 中 `lastError`，再验证宿主机 `curl http://10.250.0.101:9100/metrics`、`ip route get` 和 `wg show`。
+健康 target 应返回 `up == 1`。若为 0，检查 API 中 `lastError`，再验证宿主机到对应 target 的 `curl`、`ip route get` 和 `wg show`；点对点节点使用 WireGuard 地址，Gateway 下游节点使用 VPC 私网地址。
 
 ## 数据位置
 

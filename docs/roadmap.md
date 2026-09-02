@@ -1,25 +1,28 @@
 # 路线图
 
-## DONE
+本文件描述产品与工程能力的演进方向，不记录每日实施状态；当前进度见 [实施记录](records/implementation-status.md)。
 
-- WireGuard 测试隧道建立并完成双向连通验证。
-- 腾讯测试机 Node Exporter 通过隧道提供指标。
-- Prometheus 成功采集测试 Target，`up == 1`。
-- Prometheus 主配置语法检查通过。
+## 阶段一：基础主机监控
 
-## IN PROGRESS
+- WireGuard 点对点与 Gateway 两种跨云采集路径。
+- Node Exporter、Prometheus 与 Grafana。
+- Target 标签、配置检查、reload 与回滚流程。
 
-- 将生产 target 中由公网 IP 派生的 `host` 改为稳定资产名称。
-- 导出并脱敏 Dashboard 1860 JSON，纳入 provisioning/Git。
-- 验证 Grafana 数据恢复流程。
-- 将经过脱敏和验证的配置纳入 Git。
+## 阶段二：资产与可视化
 
-## PLANNED
+- 接入其余阿里云和腾讯云主机。
+- 统一 `host`、`cloud`、`env`、`private_ip` 标签。
+- 维护单主机详情 Dashboard，并建立多主机 Infrastructure Overview。
+- 将经过脱敏的 Dashboard JSON 纳入 provisioning 和 Git。
 
-- 接入其余阿里云与腾讯云主机。
-- 统一 cloud、environment、region、instance 等标签。
-- 优化 Grafana Dashboard。
+## 阶段三：告警与探测
+
 - 部署 Alertmanager 并接入通知渠道。
-- 部署 Blackbox Exporter，监控 HTTP、TCP、DNS 和证书。
-- 接入阿里云、腾讯云监控 API，补充 EIP、公网带宽及云产品指标。
-- 建立配置校验、发布和回滚流程。
+- 部署 Blackbox Exporter，监控 HTTP、TCP、DNS 与证书。
+- 建立主机不可达、CPU、内存、磁盘与服务可用性告警。
+
+## 阶段四：云指标与交付治理
+
+- 接入阿里云、腾讯云监控 API，补充 EIP、公网带宽和云产品指标。
+- 建立配置校验、变更审查、发布与回滚流程。
+- 引入 GitOps 或 CI，对 Prometheus 配置、Dashboard 与部署文件执行自动检查。

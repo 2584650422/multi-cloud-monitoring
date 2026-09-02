@@ -1,6 +1,6 @@
 # Monitoring Stack Deployment
 
-Prometheus 与 Grafana 的 Compose 迁移状态为 IN PROGRESS。本章给出仓库基线的完整落地方式，但执行前必须与生产机现有文件逐项比较。
+本章给出 Prometheus 与 Grafana 的 Compose 部署基线。执行前必须与生产机现有文件逐项比较，尤其是数据目录和已占用端口。
 
 ## 1. 生产目录
 
@@ -31,7 +31,7 @@ du -sh /data/docker/monitoring/prometheus/date 2>/dev/null
 du -sh /data/docker/monitoring/prometheus/data 2>/dev/null
 ```
 
-TODO：确认 `date/` 是否含现有 TSDB 数据后，再制定迁移窗口。不要直接 `mv`、删除或让两个目录互相覆盖。仓库 Compose 使用正确目标 `data/`。
+迁移保护：确认 `date/` 是否含现有 TSDB 数据后，再制定迁移窗口。不要直接 `mv`、删除或让两个目录互相覆盖。仓库 Compose 使用正确目标 `data/`。
 
 ## 2. 同步配置
 
