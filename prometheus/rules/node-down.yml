@@ -1,0 +1,11 @@
+groups:
+  - name: node-availability
+    rules:
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.host }} 节点采集失败"
+          description: "{{ $labels.host }}（{{ $labels.instance }}）已连续 2 分钟无法被 Prometheus 采集"

@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     network_mode: host
     user: "65534:65534"
+    depends_on:
+      - alertmanager
     volumes:
       - type: bind
         source: /data/docker/monitoring/prometheus/prometheus.yml
@@ -28,6 +30,39 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=15d
       - --web.listen-address=127.0.0.1:9090
+      - --web.enable-lifecycle
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    container_name: alertmanager
+    hostname: alertmanager
+    restart: unless-stopped
+    network_mode: host
+    user: "65534:65534"
+    volumes:
+      - type: bind
+        source: /data/docker/monitoring/alertmanager/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind:
+          create_host_path: false
+          selinux: Z
+      - /data/docker/monitoring/alertmanager/data:/alertmanager:Z
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        read_only: true
+        bind:
+          create_host_path: false
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=127.0.0.1:9093
       - --web.enable-lifecycle
     logging:
       driver: json-file

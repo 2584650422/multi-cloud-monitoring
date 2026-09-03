@@ -8,11 +8,12 @@
 cd /data/docker/monitoring
 docker compose ps
 docker compose logs --tail=100 prometheus
+docker compose logs --tail=100 alertmanager
 docker compose logs --tail=100 grafana
 curl -fsS http://127.0.0.1:9090/-/ready
+curl -fsS http://127.0.0.1:9093/-/ready
 wg show
-ip route get 10.250.0.101
-curl -fsS http://10.250.0.101:9100/metrics >/dev/null
+curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22node-exporter%22%7D'
 ```
 
 ## 容器与日志
@@ -21,10 +22,13 @@ curl -fsS http://10.250.0.101:9100/metrics >/dev/null
 docker compose ps
 docker compose top
 docker compose logs --tail=100 prometheus
+docker compose logs --tail=100 alertmanager
 docker compose logs --tail=100 grafana
 docker compose logs --since=30m prometheus
+docker compose logs --since=30m alertmanager
 docker compose logs --since=30m grafana
 docker inspect prometheus --format '{{.State.Status}} {{.State.Health.Status}}'
+docker inspect alertmanager --format '{{.State.Status}} {{.State.ExitCode}}'
 docker inspect grafana --format '{{.State.Status}} {{.State.ExitCode}}'
 ```
 
@@ -57,7 +61,7 @@ docker run --rm \
 ```bash
 curl -fsS 'http://127.0.0.1:9090/api/v1/targets?state=active'
 curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up'
-curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22tencent-node%22%7D'
+curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22node-exporter%22%7D'
 ```
 
 有 `jq` 时可读性更好：
@@ -66,6 +70,66 @@ curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22tencent-node%2
 curl -fsS 'http://127.0.0.1:9090/api/v1/targets?state=active' | jq \
   '.data.activeTargets[] | {scrapeUrl, health, lastError}'
 ```
+
+## 验证 NodeDown 规则
+
+`prometheus/rules/node-down.yml` 对 `job="node-exporter"` 的 `up == 0` 持续 2 分钟产生 `NodeDown`。查看规则产生的 alert：
+
+```bash
+curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=ALERTS%7Balertname%3D%22NodeDown%22%7D'
+```
+
+受控演练只在已批准的测试节点执行：停止 Node Exporter 后观察 `Pending`，两分钟后应为 `Firing`；恢复服务后，Prometheus 规则页应回到 `Normal`。
+
+```bash
+systemctl stop node_exporter
+# 等待至少 2 分钟后查询 ALERTS
+systemctl start node_exporter
+```
+
+### NodeDown 告警状态
+
+本项目规则使用 `for: 2m`，已完成一次受控演练。实际状态流转如下：
+
+```text
+Node Exporter 停止 → up = 0 → Pending →（持续 2 分钟）→ Firing
+Node Exporter 恢复 → up = 1 → Normal
+```
+
+| 状态 | 含义 |
+| --- | --- |
+| `Normal` | 当前表达式不成立；此处表示 target 可被抓取，`up=1`。 |
+| `Pending` | 表达式已成立，但尚未持续满 `for: 2m`。这是防止短暂网络抖动直接正式告警的确认期。 |
+| `Firing` | 表达式已持续至少两分钟；Alertmanager 会对其分组并按路由发送通知。 |
+
+`Resolved` 是 Alertmanager 或通知渠道对“此前处于 Firing、现已恢复”的通知事件用语。本项目已验证：Prometheus 规则页的 `Pending → Firing → Normal`，以及 Alertmanager 的 FIRING/RESOLVED SMTP 邮件投递。
+
+## Alertmanager 与邮件通知
+
+Alertmanager 仅监听 `127.0.0.1:9093`。当前已验证 NodeDown 的 FIRING 和 RESOLVED 邮件；真实 SMTP 配置不进 Git。
+
+```bash
+# 配置检查
+docker run --rm \
+  -v /data/docker/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,Z \
+  --entrypoint /bin/amtool \
+  prom/alertmanager:v0.28.0 \
+  check-config /etc/alertmanager/alertmanager.yml
+
+# 可用性、Prometheus 对接与当前活动告警
+curl -fsS http://127.0.0.1:9093/-/ready
+curl -fsS http://127.0.0.1:9090/api/v1/alertmanagers
+curl -fsS http://127.0.0.1:9093/api/v2/alerts
+```
+
+修改 Alertmanager 配置后，依次检查语法并 reload：
+
+```bash
+curl -fsS -X POST http://127.0.0.1:9093/-/reload
+docker compose logs --tail=100 alertmanager
+```
+
+若 lifecycle 未启用或 reload 失败，才在批准的变更窗口执行 `docker compose restart alertmanager`。完整 SMTP 参数、邮件测试和排查见 [Alertmanager 配置](08-alertmanager-configuration.md)。
 
 ## WireGuard 与路由
 
@@ -186,12 +250,27 @@ TSDB 保留期当前为 15d。不要手工删除 WAL 或 block 来释放空间�
 tar -C /data/docker -czf \
   /data/docker/monitoring-config-$(date +%Y%m%d%H%M%S).tar.gz \
   --exclude='monitoring/prometheus/data' \
+  --exclude='monitoring/alertmanager/alertmanager.yml' \
+  --exclude='monitoring/alertmanager/data' \
   --exclude='monitoring/grafana/data' \
   --exclude='monitoring/grafana/logs' \
   monitoring
 ```
 
-备份归档不得包含 `.env`、密钥或 Token，且不应长期留在同一故障域。
+备份归档不得包含 `.env`、SMTP 凭据、密钥或 Token，且不应长期留在同一故障域。Alertmanager 的真实配置应通过受控密钥管理或加密备份单独保存。
+
+### Alertmanager 数据
+
+`alertmanager/data/` 保存 silence 与通知状态。需要恢复这些状态时，应在批准的变更窗口停止单个 Alertmanager 再复制，并保持备份访问受控：
+
+```bash
+docker compose stop alertmanager
+tar -C /data/docker/monitoring/alertmanager -czf \
+  /secure-backup/alertmanager-data-$(date +%Y%m%d%H%M%S).tar.gz data
+docker compose start alertmanager
+```
+
+不要把真实 `alertmanager.yml` 放入普通配置备份、Git 或工单附件。
 
 ### Grafana 数据
 
@@ -217,12 +296,13 @@ docker compose start grafana
    ```bash
    docker compose images
    docker image inspect prom/prometheus:v3.13.2 --format '{{index .RepoDigests 0}}'
+   docker image inspect prom/alertmanager:v0.28.0 --format '{{index .RepoDigests 0}}'
    docker image inspect grafana/grafana:13.2.0 --format '{{index .RepoDigests 0}}'
    ```
 
 2. 在 Git 分支中修改固定 tag，不使用 `latest`。
 3. 阅读 release notes，在非生产环境运行配置检查和启动测试。
-4. 备份 Grafana 数据库，确认 Prometheus TSDB 兼容性。
+4. 备份 Grafana 数据库、Alertmanager 状态，确认 Prometheus TSDB 兼容性。
 5. 拉取并只更新目标服务：
 
    ```bash
@@ -232,14 +312,14 @@ docker compose start grafana
 
 6. 检查日志、ready、targets、Grafana Explore。
 
-Grafana 同理替换服务名。升级不是只执行 `pull`；tag 不变时行为可能受本地缓存与远端 manifest 影响，所以必须记录 digest。
+Grafana 与 Alertmanager 同理替换服务名。升级不是只执行 `pull`；tag 不变时行为可能受本地缓存与远端 manifest 影响，所以必须记录 digest。
 
 ## 配置回滚
 
 1. 将上一个已验证 Git 版本恢复到生产配置路径。
 2. Prometheus 先运行 promtool。
 3. `docker compose config`。
-4. Prometheus 用 reload；Grafana provisioning 变更重启 Grafana。
+4. Prometheus、Alertmanager 用 reload；Grafana provisioning 变更重启 Grafana。
 5. 检查日志、Target、Explore。
 
 ## 镜像回滚

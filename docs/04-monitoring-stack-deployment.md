@@ -1,6 +1,6 @@
 # Monitoring Stack Deployment
 
-本章给出 Prometheus 与 Grafana 的 Compose 部署基线。执行前必须与生产机现有文件逐项比较，尤其是数据目录和已占用端口。
+本章给出 Prometheus、Alertmanager 与 Grafana 的 Compose 部署基线。执行前必须与生产机现有文件逐项比较，尤其是数据目录和已占用端口。
 
 ## 1. 生产目录
 
@@ -8,6 +8,8 @@
 mkdir -p /data/docker/monitoring/prometheus/rules
 mkdir -p /data/docker/monitoring/prometheus/targets
 mkdir -p /data/docker/monitoring/prometheus/data
+
+mkdir -p /data/docker/monitoring/alertmanager/data
 
 mkdir -p /data/docker/monitoring/grafana/provisioning/datasources
 mkdir -p /data/docker/monitoring/grafana/provisioning/dashboards
@@ -40,8 +42,13 @@ du -sh /data/docker/monitoring/prometheus/data 2>/dev/null
 ```bash
 install -o root -g root -m 0644 prometheus/prometheus.yml \
   /data/docker/monitoring/prometheus/prometheus.yml
-install -o root -g root -m 0644 prometheus/targets/tencent-node.yml \
-  /data/docker/monitoring/prometheus/targets/tencent-node.yml
+install -o root -g root -m 0644 prometheus/targets/tencent-node.yml.example \
+  /data/docker/monitoring/prometheus/targets/tencent-node.yml.example
+install -o root -g root -m 0644 prometheus/rules/node-down.yml \
+  /data/docker/monitoring/prometheus/rules/node-down.yml
+
+install -o root -g root -m 0644 alertmanager/alertmanager.yml.example \
+  /data/docker/monitoring/alertmanager/alertmanager.yml.example
 
 install -o root -g root -m 0644 grafana/grafana.ini \
   /data/docker/monitoring/grafana/grafana.ini
@@ -52,7 +59,23 @@ install -o root -g root -m 0644 docker-compose.yml \
   /data/docker/monitoring/docker-compose.yml
 ```
 
-暂不复制 `.example` 告警规则、Alertmanager 或 Blackbox 配置。
+从 target 模板创建仅保留在监控机本地的真实清单：
+
+```bash
+cp /data/docker/monitoring/prometheus/targets/tencent-node.yml.example \
+  /data/docker/monitoring/prometheus/targets/tencent-node.yml
+vi /data/docker/monitoring/prometheus/targets/tencent-node.yml
+```
+
+从 Alertmanager 模板创建只存在于监控机的真实配置，并填入 SMTP 信息与收件人：
+
+```bash
+cp /data/docker/monitoring/alertmanager/alertmanager.yml.example \
+  /data/docker/monitoring/alertmanager/alertmanager.yml
+vi /data/docker/monitoring/alertmanager/alertmanager.yml
+```
+
+`tencent-node.yml` 含私网地址和资产名称；`alertmanager.yml` 含 SMTP 凭据和收件人地址。两者必须保持在 Git 忽略列表中。NodeDown 规则已作为 `prometheus/rules/node-down.yml` 随仓库部署。
 
 ## 3. UID、GID 与权限
 
@@ -60,6 +83,7 @@ install -o root -g root -m 0644 docker-compose.yml \
 
 ```text
 Prometheus: 65534:65534
+Alertmanager: 65534:65534
 Grafana:    472:0
 ```
 
@@ -67,6 +91,7 @@ Grafana:    472:0
 
 ```bash
 docker run --rm --entrypoint /bin/sh prom/prometheus:v3.13.2 -c 'id'
+docker run --rm --entrypoint /bin/sh prom/alertmanager:v0.28.0 -c 'id'
 docker run --rm --entrypoint /bin/sh grafana/grafana:13.2.0 -c 'id'
 ```
 
@@ -93,6 +118,12 @@ chmod 0644 /data/docker/monitoring/grafana/grafana.ini
 chown -R 65534:65534 /data/docker/monitoring/prometheus/data
 chmod 0750 /data/docker/monitoring/prometheus/data
 
+# Alertmanager runs as 65534:65534 and must be able to read this secret file.
+chown root:65534 /data/docker/monitoring/alertmanager/alertmanager.yml
+chmod 0640 /data/docker/monitoring/alertmanager/alertmanager.yml
+chown -R 65534:65534 /data/docker/monitoring/alertmanager/data
+chmod 0750 /data/docker/monitoring/alertmanager/data
+
 chown -R 472:0 /data/docker/monitoring/grafana/data
 chown -R 472:0 /data/docker/monitoring/grafana/logs
 chmod 0750 /data/docker/monitoring/grafana/data
@@ -108,12 +139,13 @@ CentOS SELinux 开启时，Compose 的 `:Z` 会为单个容器私有使用重新
 实际文件为 [docker-compose.yml](../docker-compose.yml)：
 
 - `image`：固定版本，避免无意跟随 `latest`。
-- `container_name`：让 Runbook 中 `docker exec prometheus|grafana` 稳定可用；代价是不能直接横向扩容同名服务。
+- `container_name`：让 Runbook 中 `docker exec prometheus|alertmanager|grafana` 稳定可用；代价是不能直接横向扩容同名服务。
 - `restart: unless-stopped`：进程或 Docker 恢复后自动拉起，但人工停止后保持停止。
 - `network_mode: host`：容器直接共享宿主机网络栈。
 - `user`：不以容器 root 运行，并与 bind mount 所有权匹配。
+- `depends_on`：Compose 启动时先创建 Alertmanager，再创建 Prometheus；它不替代 `/-/ready` 健康检查，Prometheus 仍会在 Alertmanager 暂不可用时重试投递。
 - `volumes`：配置只读，数据可写，所有关键内容在宿主机可见。
-- `command`：固定 Prometheus 配置、TSDB、保留期、监听和 lifecycle 参数。
+- `command`：固定各组件的配置路径、数据路径、监听和 lifecycle 参数。
 - `environment`：显式固定 Grafana paths，便于排查 provisioning 和持久化。
 - `logging`：`json-file` 单文件 50 MiB、最多 5 个，避免 Docker 日志无限增长。
 
@@ -127,9 +159,9 @@ CentOS SELinux 开启时，Compose 的 `:Z` 会为单个容器私有使用重新
 10.250.0.101 dev wg0
 ```
 
-Prometheus 需要访问 `10.250.0.101:9100`。host network 让容器的路由查询直接命中宿主机 `wg0`，不需要在 bridge namespace 中额外处理路由、NAT、FORWARD 和 Docker iptables。
+Prometheus 需要经宿主机 `wg0` 到达腾讯 VPC Gateway，再访问下游节点的私网 `IP:9100`。host network 让容器的路由查询直接命中宿主机 `wg0`，不需要在 bridge namespace 中额外处理路由、NAT、FORWARD 和 Docker iptables。
 
-取舍是容器网络隔离更弱、端口直接占用宿主机。Prometheus 因而显式只监听 `127.0.0.1:9090`；Grafana 监听宿主机 3000，仍需由安全组、防火墙或后续反向代理限制访问。
+取舍是容器网络隔离更弱、端口直接占用宿主机。Prometheus 与 Alertmanager 因而显式只监听 `127.0.0.1:9090`、`127.0.0.1:9093`；Grafana 监听宿主机 3000，仍需由安全组、防火墙或后续反向代理限制访问。
 
 Grafana 也使用 host network，因此 datasource 可访问同一网络命名空间内的 `http://127.0.0.1:9090`。在 bridge 网络中，容器自己的 `127.0.0.1` 不是 Prometheus 容器。
 
@@ -138,9 +170,11 @@ Grafana 也使用 host network，因此 datasource 可访问同一网络命名�
 | 宿主机路径 | 容器路径 | 模式 | 目的 |
 | --- | --- | --- | --- |
 | `prometheus.yml` | `/etc/prometheus/prometheus.yml` | `ro,Z` | 主配置 |
-| `rules/` | `/etc/prometheus/rules` | `ro,Z` | 规则文件；当前为空 |
+| `rules/` | `/etc/prometheus/rules` | `ro,Z` | 告警规则；当前包含 `NodeDown` |
 | `targets/` | `/etc/prometheus/targets` | `ro,Z` | file_sd 节点清单 |
 | `prometheus/data/` | `/prometheus` | `Z` | TSDB/WAL 持久化 |
+| `alertmanager.yml` | `/etc/alertmanager/alertmanager.yml` | `ro,Z` | 告警分组、路由与 SMTP 配置 |
+| `alertmanager/data/` | `/alertmanager` | `Z` | silences、通知状态等持久化数据 |
 | `grafana.ini` | `/etc/grafana/grafana.ini` | `ro,Z` | Grafana 主配置 |
 | provisioning 子目录 | `/etc/grafana/provisioning/*` | `ro,Z` | 声明式资源 |
 | `grafana/data/` | `/var/lib/grafana` | `Z` | SQLite、session、插件 |
@@ -158,6 +192,12 @@ docker run --rm \
   --entrypoint /bin/promtool \
   prom/prometheus:v3.13.2 \
   check config /etc/prometheus/prometheus.yml
+
+docker run --rm \
+  -v /data/docker/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,Z \
+  --entrypoint /bin/amtool \
+  prom/alertmanager:v0.28.0 \
+  check-config /etc/alertmanager/alertmanager.yml
 ```
 
 还要确认端口未被旧二进制服务占用：
@@ -177,6 +217,7 @@ systemctl status prometheus grafana grafana-server --no-pager 2>/dev/null
 docker compose up -d
 docker compose ps
 docker compose logs --tail=100 prometheus
+docker compose logs --tail=100 alertmanager
 docker compose logs --tail=100 grafana
 ```
 

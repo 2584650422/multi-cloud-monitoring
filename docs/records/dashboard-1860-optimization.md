@@ -2,6 +2,8 @@
 
 > 此文件保留 Grafana UI 调整的实施事实与验证结果，不替代 Grafana 部署或 provisioning 手册。
 
+> 注：本记录中的 `10.250.0.101:9100` 和 `tencent-node` 是当时点对点基线的值。Gateway 切换后的当前运行状态见 [实施状态快照](implementation-status.md)，不要把本记录中的 endpoint 直接复制到后续 target 配置。
+
 - Status: DONE（Host 变量已改为即时 Target 查询；host 命名规范化仍为 TODO）
 - Baseline: Node Exporter Full, Dashboard ID 1860
 

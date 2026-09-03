@@ -4,7 +4,7 @@
 
 ## 决策
 
-WireGuard 与 Node Exporter 保持宿主机部署；Prometheus、Grafana 以及后续服务计划由 Docker Compose 管理。
+WireGuard 与 Node Exporter 保持宿主机部署；Prometheus、Alertmanager 与 Grafana 由 Docker Compose 管理。
 
 ## 影响
 

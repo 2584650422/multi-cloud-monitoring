@@ -9,10 +9,11 @@
 | WireGuard | 宿主机 | 建立跨云加密 Overlay，并提供到腾讯目标的路由 |
 | Node Exporter | 被监控主机宿主机 | 暴露 Linux 主机指标 |
 | Prometheus | 阿里监控 Hub 的 Docker Compose | 抓取、存储与查询指标 |
+| Alertmanager | 阿里监控 Hub 的 Docker Compose | 对告警分组、去重、路由并投递邮件通知 |
 | Grafana | 阿里监控 Hub 的 Docker Compose | 展示与查询 Prometheus 数据 |
 | WireGuard Gateway | 腾讯 VPC 内指定主机 | 将 WireGuard 监控流量转发到 VPC 下游节点 |
 
-Prometheus 和 Grafana 使用 `network_mode: host`。Prometheus 因此共享宿主机路由表，直接经 `wg0` 访问跨云 target；Grafana 通过 `http://127.0.0.1:9090` 访问仅绑定 loopback 的 Prometheus。
+Prometheus、Alertmanager 和 Grafana 使用 `network_mode: host`。Prometheus 因此共享宿主机路由表，直接经 `wg0` 访问跨云 target；Prometheus 与 Alertmanager 分别只监听 `127.0.0.1:9090`、`127.0.0.1:9093`。Grafana 通过 `http://127.0.0.1:9090` 访问 Prometheus。
 
 ## 两种采集拓扑
 

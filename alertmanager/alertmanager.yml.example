@@ -1,8 +1,25 @@
-# PLANNED: Alertmanager is not deployed. Never commit real SMTP passwords or webhook tokens.
-global: {}
+# Copy to alertmanager.yml only on the monitoring host. Never commit the real file:
+# it contains SMTP credentials and recipient addresses.
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "<SMTP_HOST>:<SMTP_PORT>"
+  smtp_from: "<ALERT_FROM_ADDRESS>"
+  smtp_auth_username: "<SMTP_USERNAME>"
+  smtp_auth_password: "<SMTP_AUTH_PASSWORD>"
+  smtp_require_tls: true
 
 route:
-  receiver: placeholder
+  receiver: default
+  group_by:
+    - alertname
+    - job
+    - host
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
 
 receivers:
-  - name: placeholder
+  - name: default
+    email_configs:
+      - to: "<ALERT_RECIPIENT_ADDRESS>"
+        send_resolved: true

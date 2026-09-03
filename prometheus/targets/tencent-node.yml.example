@@ -1,0 +1,17 @@
+# Copy this file to a local *-node.yml file on the monitoring host, then replace
+# all placeholders. Local target inventories are intentionally excluded from Git.
+- targets:
+    - "<TENCENT_NODE_01_PRIVATE_IP>:9100"
+  labels:
+    host: "tc-prod-node-01"
+    cloud: "tencent"
+    env: "prod"
+    private_ip: "<TENCENT_NODE_01_PRIVATE_IP>"
+
+- targets:
+    - "<TENCENT_NODE_02_PRIVATE_IP>:9100"
+  labels:
+    host: "tc-prod-node-02"
+    cloud: "tencent"
+    env: "prod"
+    private_ip: "<TENCENT_NODE_02_PRIVATE_IP>"

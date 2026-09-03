@@ -1,6 +1,6 @@
 # Multi-Cloud Monitoring
 
-一个可复现的多云基础设施监控工程：阿里云监控中心运行 Prometheus 与 Grafana；腾讯云节点通过 WireGuard 点对点连接或 VPC 内 WireGuard Gateway 暴露 Node Exporter 指标。仓库保存配置即代码、部署手册、运维 Runbook 和已解决故障案例；密钥与运行数据不进入 Git。
+一个可复现的多云基础设施监控工程：阿里云监控中心运行 Prometheus、Alertmanager 与 Grafana；腾讯云节点通过 WireGuard 点对点连接或 VPC 内 WireGuard Gateway 暴露 Node Exporter 指标。仓库保存配置即代码、部署手册、运维 Runbook 和已解决故障案例；密钥与运行数据不进入 Git。
 
 ## 适用架构
 
@@ -12,7 +12,7 @@ Alibaba monitoring hub --+
 
 - 点对点模式适合少量独立节点：Node Exporter 监听该节点的 WireGuard 地址。
 - Gateway 模式适合同一腾讯 VPC 可达的一组节点：只有 Gateway 安装 WireGuard；下游 Node Exporter 监听各自 VPC 私网地址。
-- Prometheus 和 Grafana 通过 Docker Compose 使用宿主机网络，Prometheus 直接复用宿主机的 WireGuard 路由。
+- Prometheus、Alertmanager 和 Grafana 通过 Docker Compose 使用宿主机网络；Prometheus 直接复用宿主机的 WireGuard 路由，Alertmanager 仅在本机 `127.0.0.1:9093` 提供告警接收与邮件投递。
 
 ## 部署顺序
 
@@ -20,7 +20,8 @@ Alibaba monitoring hub --+
 2. 按 [Node Exporter 安装](docs/03-node-exporter-installation.md) 安装 exporter，并依据所选网络模式绑定正确监听地址。
 3. 按 [监控栈部署](docs/04-monitoring-stack-deployment.md) 创建目录、权限并部署 Compose。
 4. 按 [Prometheus 配置](docs/05-prometheus-configuration.md) 增加 target、检查配置、reload 并验证 `up`。
-5. 按 [Grafana 配置](docs/06-grafana-configuration.md) 验证 datasource provisioning 和 Dashboard。
+5. 按 [Alertmanager 配置](docs/08-alertmanager-configuration.md) 配置本地 SMTP 密钥并完成 FIRING/RESOLVED 邮件演练。
+6. 按 [Grafana 配置](docs/06-grafana-configuration.md) 验证 datasource provisioning 和 Dashboard。
 
 ## 文档
 
@@ -33,6 +34,7 @@ Alibaba monitoring hub --+
 - [Node Exporter 安装](docs/03-node-exporter-installation.md)
 - [监控栈部署](docs/04-monitoring-stack-deployment.md)
 - [Prometheus 配置](docs/05-prometheus-configuration.md)
+- [Alertmanager 配置与邮件通知](docs/08-alertmanager-configuration.md)
 - [Grafana 配置](docs/06-grafana-configuration.md)
 
 ### 运行与维护

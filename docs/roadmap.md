@@ -5,7 +5,7 @@
 ## 阶段一：基础主机监控
 
 - WireGuard 点对点与 Gateway 两种跨云采集路径。
-- Node Exporter、Prometheus 与 Grafana。
+- Node Exporter、Prometheus、Alertmanager 与 Grafana。
 - Target 标签、配置检查、reload 与回滚流程。
 
 ## 阶段二：资产与可视化
@@ -17,7 +17,7 @@
 
 ## 阶段三：告警与探测
 
-- 部署 Alertmanager 并接入通知渠道。
+- Alertmanager 与 SMTP 邮件通知已完成；后续优化邮件模板，并按需增加钉钉/Webhook 路由。
 - 部署 Blackbox Exporter，监控 HTTP、TCP、DNS 与证书。
 - 建立主机不可达、CPU、内存、磁盘与服务可用性告警。
 

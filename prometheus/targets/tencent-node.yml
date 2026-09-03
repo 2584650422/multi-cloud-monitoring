@@ -1,7 +1,0 @@
-- targets:
-    - 10.250.0.101:9100
-  labels:
-    cloud: tencent
-    env: test
-    private_ip: 172.18.0.6
-    host: tc-test-node-01

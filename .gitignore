@@ -7,6 +7,14 @@ secrets/
 *.pem
 wg*.conf
 
+# Local monitoring inventory: keep only sanitized templates in Git.
+prometheus/targets/*.yml
+!prometheus/targets/*.yml.example
+
+# Alertmanager configuration contains SMTP passwords and recipient addresses.
+alertmanager/alertmanager.yml
+!alertmanager/alertmanager.yml.example
+
 # Runtime data
 prometheus/data/
 prometheus/date/

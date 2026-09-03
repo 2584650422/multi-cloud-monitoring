@@ -1,6 +1,6 @@
 # Prometheus Configuration
 
-实际仓库配置为 [prometheus/prometheus.yml](../prometheus/prometheus.yml)，目标清单示例为 [prometheus/targets/tencent-node.yml](../prometheus/targets/tencent-node.yml)。
+实际仓库配置为 [prometheus/prometheus.yml](../prometheus/prometheus.yml)。目标清单仅保存脱敏模板 [prometheus/targets/tencent-node.yml.example](../prometheus/targets/tencent-node.yml.example)；监控机上的真实 `*-node.yml` 不进入 Git。
 
 ## 主配置结构
 
@@ -18,7 +18,21 @@ rule_files:
   - /etc/prometheus/rules/*.yml
 ```
 
-这里只加载真正以 `.yml` 结尾的规则。当前 `node-down.yml.example` 不会被加载，因为 Alertmanager 和告警链路尚未实施。
+这里只加载真正以 `.yml` 结尾的规则。仓库中的 `node-down.yml` 已启用 `NodeDown` 规则。
+
+## alerting
+
+当前 Alertmanager 运行在同一监控 Hub，并仅监听 loopback：
+
+```yaml
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 127.0.0.1:9093
+```
+
+Prometheus 在规则变为 `Firing` 后将告警推送给 Alertmanager；恢复时也会发送恢复状态。该链路以及 SMTP 的 FIRING/RESOLVED 邮件已通过 NodeDown 演练验证。Alertmanager 配置、邮件路由和 reload 步骤见 [Alertmanager 配置](08-alertmanager-configuration.md)。
 
 ## scrape_configs
 
@@ -34,33 +48,32 @@ Prometheus 自监控：
 腾讯 Node Exporter 使用 file_sd：
 
 ```yaml
-- job_name: tencent-node
+- job_name: node-exporter
   file_sd_configs:
     - files:
-        - /etc/prometheus/targets/tencent-node.yml
-      refresh_interval: 1m
+        - /etc/prometheus/targets/*-node.yml
 ```
 
 `job_name` 会成为 `job` 标签。file_sd 把节点清单与采集策略分开，新增主机时不必继续扩大主配置。
 
-## 点对点 Target 示例与标签
+## 脱敏 Target 模板与标签
 
 ```yaml
 - targets:
-    - 10.250.0.101:9100
+    - "<TENCENT_NODE_PRIVATE_IP>:9100"
   labels:
-    cloud: tencent
-    env: test
-    private_ip: 172.18.0.6
-    host: tc-test-node-01
+    cloud: "tencent"
+    env: "prod"
+    private_ip: "<TENCENT_NODE_PRIVATE_IP>"
+    host: "tc-prod-node-01"
 ```
 
-- `10.250.0.101`：WireGuard Overlay 地址，Prometheus 实际通过它采集。
-- `172.18.0.6`：腾讯 VPC 中真实私网地址，只作为识别标签，不参与这次路由。
+- `targets` 写 Prometheus 实际访问的 endpoint：点对点使用 WireGuard 地址；Gateway 下游使用节点腾讯 VPC 私网地址。
+- `private_ip` 保存该节点的 VPC 私网地址，用于资产识别和排障。
 - `cloud`、`env`：用于 Grafana 过滤和告警路由。
 - `host`：给人阅读的稳定资产名称。按资产命名规范维护，不使用公网 IP 或临时 hostname。
 
-`instance` 不在 target labels 中手工覆盖。Prometheus 自动把真实采集 endpoint 写成 `instance="10.250.0.101:9100"`；`host` 承担可读名称。不要把公网 IP 当作 `host`。
+`instance` 不在 target labels 中手工覆盖。Prometheus 自动把真实采集 endpoint 写入 `instance`；`host` 承担可读名称。不要把公网 IP 当作 `host`。
 
 当前标准标签只保留：
 
@@ -103,7 +116,15 @@ private_ip  云 VPC 私网地址
 
 `10.250.0.102` 是 Gateway 自身的 Overlay 地址，不是下游节点的 target。Gateway 路由、FORWARD 与 SNAT 的配置顺序见 [WireGuard Gateway 部署](02-wireguard-gateway.md)。
 
-部署到宿主机后，先检查完整配置，不要直接重启。
+在监控机上从模板创建本地 target 文件（名称必须匹配 `*-node.yml`），填写真实私网 IP 与资产名后再检查配置：
+
+```bash
+cp /data/docker/monitoring/prometheus/targets/tencent-node.yml.example \
+  /data/docker/monitoring/prometheus/targets/tencent-node.yml
+vi /data/docker/monitoring/prometheus/targets/tencent-node.yml
+```
+
+不要把生成的真实 `*-node.yml` 回传到公共 Git 仓库。
 
 ## promtool 检查
 
@@ -142,7 +163,7 @@ curl -fsS http://127.0.0.1:9090/-/ready
 curl -fsS 'http://127.0.0.1:9090/api/v1/targets?state=active'
 ```
 
-file_sd target 文件会按 `refresh_interval` 自动重新读取，但仍应先执行 promtool，并通过 API 验证发现结果。
+file_sd target 文件会自动重新发现，但仍应先执行 promtool，并通过 API 验证发现结果。
 
 如果 lifecycle 未启用或 reload 返回 403/404，核对 Compose 实际 command；必要时在变更窗口执行：
 
@@ -154,7 +175,7 @@ docker compose restart prometheus
 
 ```bash
 curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up'
-curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22tencent-node%22%7D'
+curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22node-exporter%22%7D'
 curl -fsS 'http://127.0.0.1:9090/api/v1/targets?state=active'
 ```
 
