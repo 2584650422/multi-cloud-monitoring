@@ -73,6 +73,7 @@ prometheus/                   Prometheus 主配置、targets、规则示例
 grafana/                      Grafana 配置与 provisioning
 wireguard/examples/           不含真实密钥的 WireGuard 模板
 systemd/                      点对点 Node Exporter systemd 单元
+scripts/                      可独立复制到节点执行的安装脚本
 docs/                         部署、配置、Runbook、故障案例
 docs/records/                 实施过程与实时状态记录
 ```

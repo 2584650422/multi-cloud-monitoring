@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+
+# Restore only the monitoring Gateway's ipset and iptables rules.
+# Docker/SafeLine-owned chains are intentionally not saved or restored here.
+#
+# This production template defaults to the current Tencent production Gateway.
+# Review LAN_IF and SNAT_IP before deploying it to another host.
+
+set -Eeuo pipefail
+
+SET_NAME="${SET_NAME:-wg-monitor-targets}"
+TEMP_SET="${SET_NAME}-new"
+TARGET_FILE="${TARGET_FILE:-/etc/wireguard/wg-monitor-targets.list}"
+
+WG_IF="${WG_IF:-wg0}"
+LAN_IF="${LAN_IF:-eth0}"
+MONITOR_IP="${MONITOR_IP:-10.250.0.1/32}"
+SNAT_IP="${SNAT_IP:-172.18.20.16}"
+
+log() {
+  printf '[wg-monitor-gateway-fw] %s\n' "$*"
+}
+
+fail() {
+  printf '[wg-monitor-gateway-fw] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "缺少命令: $1"
+}
+
+wait_ready() {
+  local attempt
+
+  for attempt in $(seq 1 30); do
+    if ip link show "${WG_IF}" >/dev/null 2>&1 && \
+       iptables -nL DOCKER-USER >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  fail "等待 ${WG_IF} 或 DOCKER-USER 就绪超时"
+}
+
+load_ipset() {
+  local line ip
+
+  [[ -f "${TARGET_FILE}" ]] || fail "未找到目标清单: ${TARGET_FILE}"
+
+  ipset create "${SET_NAME}" hash:ip family inet -exist
+  ipset destroy "${TEMP_SET}" >/dev/null 2>&1 || true
+  ipset create "${TEMP_SET}" hash:ip family inet
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    ip="${line%%#*}"
+    ip="$(tr -d '[:space:]' <<<"${ip}")"
+    [[ -z "${ip}" ]] && continue
+    ipset add "${TEMP_SET}" "${ip}" -exist
+  done <"${TARGET_FILE}"
+
+  # Atomic replacement avoids a period in which the production set is empty.
+  ipset swap "${TEMP_SET}" "${SET_NAME}"
+  ipset destroy "${TEMP_SET}"
+}
+
+add_rules() {
+  if ! iptables -C DOCKER-USER \
+    -i "${WG_IF}" -o "${LAN_IF}" -s "${MONITOR_IP}" \
+    -m set --match-set "${SET_NAME}" dst \
+    -p tcp --dport 9100 \
+    -m conntrack --ctstate NEW,ESTABLISHED \
+    -j ACCEPT >/dev/null 2>&1; then
+    iptables -I DOCKER-USER 1 \
+      -i "${WG_IF}" -o "${LAN_IF}" -s "${MONITOR_IP}" \
+      -m set --match-set "${SET_NAME}" dst \
+      -p tcp --dport 9100 \
+      -m conntrack --ctstate NEW,ESTABLISHED \
+      -j ACCEPT
+  fi
+
+  if ! iptables -C DOCKER-USER \
+    -i "${LAN_IF}" -o "${WG_IF}" -d "${MONITOR_IP}" \
+    -m set --match-set "${SET_NAME}" src \
+    -p tcp --sport 9100 \
+    -m conntrack --ctstate ESTABLISHED,RELATED \
+    -j ACCEPT >/dev/null 2>&1; then
+    iptables -I DOCKER-USER 2 \
+      -i "${LAN_IF}" -o "${WG_IF}" -d "${MONITOR_IP}" \
+      -m set --match-set "${SET_NAME}" src \
+      -p tcp --sport 9100 \
+      -m conntrack --ctstate ESTABLISHED,RELATED \
+      -j ACCEPT
+  fi
+
+  if ! iptables -t nat -C POSTROUTING \
+    -s "${MONITOR_IP}" \
+    -m set --match-set "${SET_NAME}" dst \
+    -o "${LAN_IF}" -p tcp --dport 9100 \
+    -j SNAT --to-source "${SNAT_IP}" >/dev/null 2>&1; then
+    iptables -t nat -I POSTROUTING 1 \
+      -s "${MONITOR_IP}" \
+      -m set --match-set "${SET_NAME}" dst \
+      -o "${LAN_IF}" -p tcp --dport 9100 \
+      -j SNAT --to-source "${SNAT_IP}"
+  fi
+}
+
+delete_rules() {
+  while iptables -C DOCKER-USER \
+    -i "${WG_IF}" -o "${LAN_IF}" -s "${MONITOR_IP}" \
+    -m set --match-set "${SET_NAME}" dst \
+    -p tcp --dport 9100 \
+    -m conntrack --ctstate NEW,ESTABLISHED \
+    -j ACCEPT >/dev/null 2>&1; do
+    iptables -D DOCKER-USER \
+      -i "${WG_IF}" -o "${LAN_IF}" -s "${MONITOR_IP}" \
+      -m set --match-set "${SET_NAME}" dst \
+      -p tcp --dport 9100 \
+      -m conntrack --ctstate NEW,ESTABLISHED \
+      -j ACCEPT
+  done
+
+  while iptables -C DOCKER-USER \
+    -i "${LAN_IF}" -o "${WG_IF}" -d "${MONITOR_IP}" \
+    -m set --match-set "${SET_NAME}" src \
+    -p tcp --sport 9100 \
+    -m conntrack --ctstate ESTABLISHED,RELATED \
+    -j ACCEPT >/dev/null 2>&1; do
+    iptables -D DOCKER-USER \
+      -i "${LAN_IF}" -o "${WG_IF}" -d "${MONITOR_IP}" \
+      -m set --match-set "${SET_NAME}" src \
+      -p tcp --sport 9100 \
+      -m conntrack --ctstate ESTABLISHED,RELATED \
+      -j ACCEPT
+  done
+
+  while iptables -t nat -C POSTROUTING \
+    -s "${MONITOR_IP}" \
+    -m set --match-set "${SET_NAME}" dst \
+    -o "${LAN_IF}" -p tcp --dport 9100 \
+    -j SNAT --to-source "${SNAT_IP}" >/dev/null 2>&1; do
+    iptables -t nat -D POSTROUTING \
+      -s "${MONITOR_IP}" \
+      -m set --match-set "${SET_NAME}" dst \
+      -o "${LAN_IF}" -p tcp --dport 9100 \
+      -j SNAT --to-source "${SNAT_IP}"
+  done
+}
+
+main() {
+  require_command ip
+  require_command ipset
+  require_command iptables
+
+  case "${1:-}" in
+    start|reload)
+      wait_ready
+      load_ipset
+      add_rules
+      log "Gateway monitoring rules are ready"
+      ;;
+    stop)
+      delete_rules
+      ipset destroy "${TEMP_SET}" >/dev/null 2>&1 || true
+      ipset destroy "${SET_NAME}" >/dev/null 2>&1 || true
+      log "Gateway monitoring rules are removed"
+      ;;
+    *)
+      printf 'Usage: %s {start|reload|stop}\n' "$0" >&2
+      return 2
+      ;;
+  esac
+}
+
+main "$@"

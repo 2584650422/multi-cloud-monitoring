@@ -1,0 +1,15 @@
+[Unit]
+Description=WireGuard Monitoring Gateway Firewall
+After=network-online.target docker.service wg-quick@wg0.service
+Requires=docker.service
+PartOf=docker.service wg-quick@wg0.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/wg-monitor-gateway-fw start
+ExecReload=/usr/local/sbin/wg-monitor-gateway-fw reload
+ExecStop=/usr/local/sbin/wg-monitor-gateway-fw stop
+
+[Install]
+WantedBy=multi-user.target

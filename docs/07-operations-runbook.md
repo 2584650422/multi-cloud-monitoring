@@ -154,7 +154,15 @@ ip route replace 172.18.0.0/16 dev wg0   # 仅在阿里 Hub，按实际网段调
 ip route get 172.18.0.10
 ```
 
-`syncconf` 不会自动增加路由；接口不存在或必须重建时才在维护窗口执行 `wg-quick down wg0 && wg-quick up wg0`。生产转发规则先按一台节点的 TCP/9100 精确匹配，保持 FORWARD DROP。完整命令见 [`02-wireguard-gateway.md`](02-wireguard-gateway.md)。
+`syncconf` 不会自动增加路由；接口不存在或必须重建时才在维护窗口执行 `wg-quick down wg0 && wg-quick up wg0`。已覆盖生产网段的新节点不需要再新增单节点 iptables 规则：先验证 Jenkins 到目标私网 `IP:9100` 的连通性，再把 IP 写入 `/etc/wireguard/wg-monitor-targets.list` 并执行：
+
+```bash
+systemctl reload wg-monitor-gateway
+ipset test wg-monitor-targets TARGET_PRIVATE_IP
+systemctl status wg-monitor-gateway --no-pager
+```
+
+`wg-monitor-gateway` 使用 ipset 公共规则，`active (exited)` 是正常的 oneshot 服务状态。不要只手工 `ipset add` 作为长期变更，因为下次 reload 或重启会按清单覆盖运行态。完整命令、回退与重启验证见 [`02-wireguard-gateway.md`](02-wireguard-gateway.md)。
 
 ## Node Exporter
 

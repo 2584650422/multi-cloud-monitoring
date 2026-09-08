@@ -7,6 +7,10 @@ secrets/
 *.pem
 wg*.conf
 
+# Gateway monitoring allow-list contains the real private asset inventory.
+wireguard/*.list
+!wireguard/*.list.example
+
 # Local monitoring inventory: keep only sanitized templates in Git.
 prometheus/targets/*.yml
 !prometheus/targets/*.yml.example

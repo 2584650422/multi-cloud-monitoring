@@ -66,6 +66,77 @@ node_exporter, version 1.11.1
 
 如果输出不是 `1.11.1`，先停止继续部署，核对下载包、解压目录和 `/usr/local/bin/node_exporter` 是否仍是旧文件。
 
+## Gateway 节点自动安装脚本
+
+批量接入 Gateway 下游节点时，不需要在每台服务器 clone 本仓库。只需把 [安装脚本](../scripts/install-node-exporter.sh) 复制到目标节点 `/root`：
+
+```bash
+scp scripts/install-node-exporter.sh root@TARGET_HOST:/root/
+ssh root@TARGET_HOST \
+  'chmod 0700 /root/install-node-exporter.sh && /root/install-node-exporter.sh install'
+```
+
+脚本默认执行以下工作：
+
+1. 固定安装 Node Exporter `1.11.1`，支持 `x86_64` 和 `aarch64`。
+2. 从 `eth0` 读取第一个 RFC1918 私网 IPv4 地址，并精确监听该地址的 TCP/9100；检测到公网地址会拒绝安装。
+3. 优先使用 `/root/node_exporter-1.11.1.linux-<arch>.tar.gz`；文件不存在才从 GitHub Release 下载。
+4. 使用脚本内置的 Node Exporter `1.11.1` 官方 SHA256 校验安装包；已有安装包时不会再访问网络。
+5. 创建非登录用户、安装二进制、生成 systemd 单元并启用服务。
+6. 验证服务状态、安装版本和本机 `/metrics`；脚本会等待监听 socket 就绪（最多 10 秒），避免 systemd 刚显示 active 时的瞬时 connection refused 误判。
+7. 无论成功或失败，删除本次安装包和临时解压目录；已有二进制与 systemd 单元会保留带时间戳的备份。
+
+成功后会输出：
+
+```text
+监听地址: <NODE_PRIVATE_IP>:9100
+本机测试: curl -fsS http://<NODE_PRIVATE_IP>:9100/metrics | head
+Prometheus target: <NODE_PRIVATE_IP>:9100
+```
+
+若旧版脚本在 `systemctl` 显示 `active (running)`、日志已出现 `Listening on <NODE_PRIVATE_IP>:9100` 后立刻报本机 `curl: (7) Connection refused`，通常是启动后的就绪竞态，不代表安装失败。先手动确认：
+
+```bash
+sleep 2
+ss -lntp | grep 9100
+curl -fsS http://<NODE_PRIVATE_IP>:9100/metrics | head
+```
+
+以上成功时服务已经可用；使用仓库更新后的脚本可避免此类瞬时误报。
+
+如果节点网卡不是 `eth0`，执行：
+
+```bash
+NETWORK_INTERFACE=ens192 /root/install-node-exporter.sh install
+```
+
+如需明确指定该网卡上的某个地址：
+
+```bash
+NETWORK_INTERFACE=eth0 LISTEN_IP=172.18.0.28 /root/install-node-exporter.sh install
+```
+
+脚本会确认 `LISTEN_IP` 确实属于指定网卡，避免把错误地址写入 systemd。它适用于 Gateway 下游节点；点对点 WireGuard 节点仍应按后文绑定对应的 `wg0` 地址。
+
+### 卸载 Node Exporter
+
+脚本提供独立的卸载模式。在目标节点执行：
+
+```bash
+/root/install-node-exporter.sh uninstall
+```
+
+该操作只删除本机以下内容：
+
+```text
+node_exporter.service
+/usr/local/bin/node_exporter
+```
+
+它会停止并禁用服务、重新加载 systemd；不会自动改监控机 target，不会删除 Prometheus 的历史 TSDB 指标，也不会删除 `node_exporter` 系统用户或带时间戳的安装备份。
+
+如果该节点从监控体系退役，仍需在监控机单独删除 `targets/*-node.yml` 中对应的 target，再检查并 reload/restart Prometheus。脚本不连接监控机，也不会代替这一步。
+
 ## systemd
 
 把仓库中的 [systemd/node_exporter.service](../systemd/node_exporter.service) 安装到系统：
