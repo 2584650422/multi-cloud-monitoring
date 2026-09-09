@@ -7,7 +7,7 @@
 - Gateway 地址：Overlay `10.250.0.102/32`，腾讯 VPC 私网 `172.18.20.16`。
 - 阿里 Hub 与 Jenkins Gateway 的 WireGuard Overlay 连通正常。
 - 阿里 Hub 到腾讯生产网段的路由、Jenkins 基于 `wg-monitor-targets` ipset 的 `DOCKER-USER` FORWARD 公共规则和 SNAT 已完成端到端验证。
-- Jenkins 已配置 `wg-monitor-gateway` 持久化服务：从 `/etc/wireguard/wg-monitor-targets.list` 原子恢复 ipset，并确保三条公共规则不重复添加。
+- Jenkins 已配置并在当前运行态启动 `wg-monitor-gateway` 持久化服务：从 `/etc/wireguard/wg-monitor-targets.list` 原子恢复 ipset，并确保三条公共规则不重复添加；服务启动后既有采集链路仍正常。该 oneshot 服务显示 `active (exited)` 属于预期状态。
 - Prometheus 已经经 Gateway 成功采集至少两个腾讯侧 Node Exporter 私网 target。
 - 下游 Node Exporter 监听各自 VPC 私网 `IP:9100`；`10.250.0.101:9100` 仅属于早期点对点测试路径。
 

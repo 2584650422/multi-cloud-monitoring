@@ -1,6 +1,6 @@
 # 实施状态快照
 
-更新时间：2026-09-08
+更新时间：2026-09-09
 
 本文是根据实施对话整理的状态快照，不替代仓库中的部署手册，也不替代生产主机的实时审计结果。
 
@@ -9,7 +9,7 @@
 - 阿里监控 Hub、Prometheus、Grafana 和 Grafana datasource provisioning 已可用。
 - Jenkins Gateway 的 WireGuard Overlay 已建立；Gateway 使用 `10.250.0.102/32` 与腾讯 VPC 私网地址 `172.18.20.16`。
 - Gateway 到腾讯生产网段的路由、基于 `wg-monitor-targets` ipset 的 FORWARD/SNAT 公共规则以及 Prometheus 端到端抓取已经完成验证。
-- Gateway 持久化已配置：`wg-quick@wg0` 已 enable，`ip_forward` 有独立 sysctl 配置，`wg-monitor-gateway` systemd 服务负责从准入清单原子恢复 ipset 与三条公共规则。
+- Gateway 持久化已配置：`wg-quick@wg0` 已 enable，`ip_forward` 有独立 sysctl 配置，`wg-monitor-gateway` systemd 服务负责从准入清单原子恢复 ipset 与三条公共规则。该服务已在当前运行态启动，既有采集链路保持正常；oneshot 服务显示 `active (exited)` 属于预期状态。
 - 阿里监控机与腾讯侧至少两个 Node Exporter target 已被 Prometheus 采集；`up` 查询可区分 UP 与 DOWN。
 - Grafana Host 变量基于即时 `up` 查询：仍配置的故障节点会保留在下拉列表，已从 targets 删除的节点不会作为当前资产显示。
 - 原点对点验证曾使用 `10.250.0.101:9100`；Gateway 下游节点使用各自腾讯 VPC 私网 `IP:9100`。
