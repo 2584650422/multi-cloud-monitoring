@@ -10,16 +10,16 @@
 
 ## 阶段二：资产与可视化
 
-- 接入其余阿里云和腾讯云主机。
+- 对新增或尚未纳管的阿里云、腾讯云主机按既有标准接入。
 - 统一 `host`、`cloud`、`env`、`private_ip` 标签。
 - 维护单主机详情 Dashboard，并建立多主机 Infrastructure Overview。
 - 将经过脱敏的 Dashboard JSON 纳入 provisioning 和 Git。
 
 ## 阶段三：告警与探测
 
-- Alertmanager 与 SMTP 邮件通知已完成；后续优化邮件模板，并按需增加钉钉/Webhook 路由。
+- Alertmanager、SMTP 邮件通知、中文 HTML 邮件模板与 NodeDown/磁盘空间告警已完成；后续按需增加钉钉/Webhook 路由、告警抑制与分级路由。
 - 部署 Blackbox Exporter，监控 HTTP、TCP、DNS 与证书。
-- 建立主机不可达、CPU、内存、磁盘与服务可用性告警。
+- 建立 CPU、内存、服务可用性告警；主机不可达与磁盘空间告警已完成。
 
 ## 阶段四：云指标与交付治理
 

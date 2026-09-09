@@ -8,8 +8,11 @@ global:
   smtp_auth_password: "<SMTP_AUTH_PASSWORD>"
   smtp_require_tls: true
 
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
 route:
-  receiver: default
+  receiver: email
   group_by:
     - alertname
     - job
@@ -19,7 +22,10 @@ route:
   repeat_interval: 1h
 
 receivers:
-  - name: default
+  - name: email
     email_configs:
       - to: "<ALERT_RECIPIENT_ADDRESS>"
         send_resolved: true
+        headers:
+          Subject: '{{ template "email.subject" . }}'
+        html: '{{ template "email.html" . }}'

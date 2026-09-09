@@ -10,6 +10,7 @@ mkdir -p /data/docker/monitoring/prometheus/targets
 mkdir -p /data/docker/monitoring/prometheus/data
 
 mkdir -p /data/docker/monitoring/alertmanager/data
+mkdir -p /data/docker/monitoring/alertmanager/templates
 
 mkdir -p /data/docker/monitoring/grafana/provisioning/datasources
 mkdir -p /data/docker/monitoring/grafana/provisioning/dashboards
@@ -17,6 +18,32 @@ mkdir -p /data/docker/monitoring/grafana/provisioning/alerting
 mkdir -p /data/docker/monitoring/grafana/provisioning/plugins
 mkdir -p /data/docker/monitoring/grafana/data
 mkdir -p /data/docker/monitoring/grafana/logs
+```
+
+Alertmanager 的模板目录是实际必需目录，不是可选的临时目录：Compose 对它使用 bind mount 且设置了 `create_host_path: false`。目录缺失时 `docker compose up` 会直接失败，而不是静默创建空目录。
+
+创建后，关键路径应至少为：
+
+```text
+/data/docker/monitoring/
+├── alertmanager/
+│   ├── alertmanager.yml              # 本机机密配置，不进 Git
+│   ├── data/
+│   └── templates/
+│       └── email.tmpl                # 中文邮件模板
+├── prometheus/
+│   ├── rules/
+│   ├── targets/
+│   └── data/
+└── grafana/
+    ├── data/
+    └── logs/
+```
+
+检查模板目录已创建：
+
+```bash
+find /data/docker/monitoring/alertmanager -maxdepth 2 -type d -print
 ```
 
 已知历史上可能创建了：
@@ -46,9 +73,13 @@ install -o root -g root -m 0644 prometheus/targets/tencent-node.yml.example \
   /data/docker/monitoring/prometheus/targets/tencent-node.yml.example
 install -o root -g root -m 0644 prometheus/rules/node-down.yml \
   /data/docker/monitoring/prometheus/rules/node-down.yml
+install -o root -g root -m 0644 prometheus/rules/disk-space.yml.example \
+  /data/docker/monitoring/prometheus/rules/disk-space.yml.example
 
 install -o root -g root -m 0644 alertmanager/alertmanager.yml.example \
   /data/docker/monitoring/alertmanager/alertmanager.yml.example
+install -o root -g root -m 0644 alertmanager/templates/email.tmpl \
+  /data/docker/monitoring/alertmanager/templates/email.tmpl
 
 install -o root -g root -m 0644 grafana/grafana.ini \
   /data/docker/monitoring/grafana/grafana.ini
@@ -75,7 +106,9 @@ cp /data/docker/monitoring/alertmanager/alertmanager.yml.example \
 vi /data/docker/monitoring/alertmanager/alertmanager.yml
 ```
 
-`tencent-node.yml` 含私网地址和资产名称；`alertmanager.yml` 含 SMTP 凭据和收件人地址。两者必须保持在 Git 忽略列表中。NodeDown 规则已作为 `prometheus/rules/node-down.yml` 随仓库部署。
+上面的同步步骤已经将仓库中的 `alertmanager/templates/email.tmpl` 安装到生产模板目录。它不含 SMTP 凭据，可以由 Git 管理；修改后需连同 `alertmanager.yml` 一起执行 `amtool check-config` 并 reload Alertmanager，详见 [Alertmanager 配置](08-alertmanager-configuration.md)。
+
+`tencent-node.yml` 含私网地址和资产名称；`alertmanager.yml` 含 SMTP 凭据和收件人地址。两者必须保持在 Git 忽略列表中。NodeDown 已作为真实规则随仓库部署；磁盘规则使用脱敏结构，必须在监控 Hub 将 special host placeholder 替换为审批后的本地策略，详见 [告警规则](09-alert-rules.md)。
 
 ## 3. UID、GID 与权限
 
@@ -121,6 +154,9 @@ chmod 0750 /data/docker/monitoring/prometheus/data
 # Alertmanager runs as 65534:65534 and must be able to read this secret file.
 chown root:65534 /data/docker/monitoring/alertmanager/alertmanager.yml
 chmod 0640 /data/docker/monitoring/alertmanager/alertmanager.yml
+chown -R root:root /data/docker/monitoring/alertmanager/templates
+find /data/docker/monitoring/alertmanager/templates -type d -exec chmod 0755 {} \;
+find /data/docker/monitoring/alertmanager/templates -type f -exec chmod 0644 {} \;
 chown -R 65534:65534 /data/docker/monitoring/alertmanager/data
 chmod 0750 /data/docker/monitoring/alertmanager/data
 
@@ -170,10 +206,11 @@ Grafana 也使用 host network，因此 datasource 可访问同一网络命名�
 | 宿主机路径 | 容器路径 | 模式 | 目的 |
 | --- | --- | --- | --- |
 | `prometheus.yml` | `/etc/prometheus/prometheus.yml` | `ro,Z` | 主配置 |
-| `rules/` | `/etc/prometheus/rules` | `ro,Z` | 告警规则；当前包含 `NodeDown` |
+| `rules/` | `/etc/prometheus/rules` | `ro,Z` | 告警规则；当前包含 `NodeDown` 与本地磁盘空间规则 |
 | `targets/` | `/etc/prometheus/targets` | `ro,Z` | file_sd 节点清单 |
 | `prometheus/data/` | `/prometheus` | `Z` | TSDB/WAL 持久化 |
 | `alertmanager.yml` | `/etc/alertmanager/alertmanager.yml` | `ro,Z` | 告警分组、路由与 SMTP 配置 |
+| `alertmanager/templates/` | `/etc/alertmanager/templates/` | `ro,Z` | 中文邮件主题与 HTML 正文模板 |
 | `alertmanager/data/` | `/alertmanager` | `Z` | silences、通知状态等持久化数据 |
 | `grafana.ini` | `/etc/grafana/grafana.ini` | `ro,Z` | Grafana 主配置 |
 | provisioning 子目录 | `/etc/grafana/provisioning/*` | `ro,Z` | 声明式资源 |
@@ -194,7 +231,7 @@ docker run --rm \
   check config /etc/prometheus/prometheus.yml
 
 docker run --rm \
-  -v /data/docker/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,Z \
+  -v /data/docker/monitoring/alertmanager:/etc/alertmanager:ro,Z \
   --entrypoint /bin/amtool \
   prom/alertmanager:v0.28.0 \
   check-config /etc/alertmanager/alertmanager.yml

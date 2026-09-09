@@ -1,0 +1,40 @@
+# Sanitized structure of the production disk-space policy. Copy this file to
+# disk-space.yml on the monitoring Hub, then replace special-host placeholders.
+groups:
+  - name: node-filesystem
+    rules:
+      # Default policy: 80% used for 10 minutes. If special thresholds are
+      # configured below, exclude those hosts here to prevent duplicate alerts.
+      - alert: DiskSpaceWarning
+        expr: |
+          (
+            1 - (
+              node_filesystem_avail_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host!~"<SPECIAL_HOST_REGEX>"}
+              /
+              node_filesystem_size_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host!~"<SPECIAL_HOST_REGEX>"}
+            )
+          ) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} 磁盘空间使用率过高"
+          description: "{{ $labels.host }}（{{ $labels.instance }}）挂载点 {{ $labels.mountpoint }} 使用率已超过 80%，当前 {{ printf \"%.2f\" $value }}%。"
+
+      # Example of a host group with a different threshold. Replace both the
+      # regex and threshold; keep the default rule's host!~ exclusion aligned.
+      - alert: DiskSpaceWarningSpecial
+        expr: |
+          (
+            1 - (
+              node_filesystem_avail_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host=~"<SPECIAL_HOST_REGEX>"}
+              /
+              node_filesystem_size_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host=~"<SPECIAL_HOST_REGEX>"}
+            )
+          ) * 100 > <SPECIAL_THRESHOLD_PERCENT>
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} 磁盘空间使用率过高"
+          description: "{{ $labels.host }}（{{ $labels.instance }}）挂载点 {{ $labels.mountpoint }} 达到特殊阈值，当前 {{ printf \"%.2f\" $value }}%。"

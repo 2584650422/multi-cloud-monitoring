@@ -18,7 +18,7 @@ rule_files:
   - /etc/prometheus/rules/*.yml
 ```
 
-这里只加载真正以 `.yml` 结尾的规则。仓库中的 `node-down.yml` 已启用 `NodeDown` 规则。
+这里只加载真正以 `.yml` 结尾的规则。仓库中的 `node-down.yml` 已启用 `NodeDown` 规则；当前生产环境也已启用磁盘空间规则。规则策略、特殊阈值和验证步骤见 [Prometheus 告警规则](09-alert-rules.md)。
 
 ## alerting
 
@@ -84,7 +84,7 @@ env         prod / test
 private_ip  云 VPC 私网地址
 ```
 
-`wg_ip` 已能从 `instance` 得到，`public_ip` 不参与 Dashboard 筛选且可能变化，`instance_name` 与 `host` 重复，因此不保留。Node Exporter 的 `nodename` 是操作系统 hostname，也不替代资产名称。
+`wg_ip` 已能从 `instance` 得到，`instance_name` 与 `host` 重复，因此不保留。`public_ip` 不参与 Dashboard 筛选，但可作为**可选**标签供 Alertmanager 邮件展示：有公网 IP 时填写；没有公网 IP 时省略该标签，不要填空字符串。Node Exporter 的 `nodename` 是操作系统 hostname，也不替代资产名称。
 
 ## 增加 Target
 

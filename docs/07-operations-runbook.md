@@ -106,12 +106,12 @@ Node Exporter 恢复 → up = 1 → Normal
 
 ## Alertmanager 与邮件通知
 
-Alertmanager 仅监听 `127.0.0.1:9093`。当前已验证 NodeDown 的 FIRING 和 RESOLVED 邮件；真实 SMTP 配置不进 Git。
+Alertmanager 仅监听 `127.0.0.1:9093`。当前已验证 NodeDown 与 DiskSpaceWarning 的 FIRING/RESOLVED 邮件；真实 SMTP 配置不进 Git。中文模板、规则和特殊磁盘阈值见 [Alertmanager 配置](08-alertmanager-configuration.md) 与 [Prometheus 告警规则](09-alert-rules.md)。
 
 ```bash
 # 配置检查
 docker run --rm \
-  -v /data/docker/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,Z \
+  -v /data/docker/monitoring/alertmanager:/etc/alertmanager:ro,Z \
   --entrypoint /bin/amtool \
   prom/alertmanager:v0.28.0 \
   check-config /etc/alertmanager/alertmanager.yml

@@ -52,6 +52,13 @@ services:
         bind:
           create_host_path: false
           selinux: Z
+      - type: bind
+        source: /data/docker/monitoring/alertmanager/templates
+        target: /etc/alertmanager/templates
+        read_only: true
+        bind:
+          create_host_path: false
+          selinux: Z
       - /data/docker/monitoring/alertmanager/data:/alertmanager:Z
       - type: bind
         source: /etc/localtime

@@ -10,16 +10,17 @@
 - Jenkins Gateway 的 WireGuard Overlay 已建立；Gateway 使用 `10.250.0.102/32` 与腾讯 VPC 私网地址 `172.18.20.16`。
 - Gateway 到腾讯生产网段的路由、基于 `wg-monitor-targets` ipset 的 FORWARD/SNAT 公共规则以及 Prometheus 端到端抓取已经完成验证。
 - Gateway 持久化已配置：`wg-quick@wg0` 已 enable，`ip_forward` 有独立 sysctl 配置，`wg-monitor-gateway` systemd 服务负责从准入清单原子恢复 ipset 与三条公共规则。该服务已在当前运行态启动，既有采集链路保持正常；oneshot 服务显示 `active (exited)` 属于预期状态。
-- 阿里监控机与腾讯侧至少两个 Node Exporter target 已被 Prometheus 采集；`up` 查询可区分 UP 与 DOWN。
+- 当前纳管的 Node Exporter target 已完成接入并由 Prometheus 采集；`up` 查询可区分 UP 与 DOWN。
 - Grafana Host 变量基于即时 `up` 查询：仍配置的故障节点会保留在下拉列表，已从 targets 删除的节点不会作为当前资产显示。
 - 原点对点验证曾使用 `10.250.0.101:9100`；Gateway 下游节点使用各自腾讯 VPC 私网 `IP:9100`。
 - NodeDown 规则已启用并完成演练：停止 Node Exporter 后规则状态经历 `Pending -> Firing`；恢复后在 Prometheus 规则页回到 `Normal`。
-- Alertmanager 已部署并被 Prometheus 识别；NodeDown 的 SMTP `FIRING` 与 `RESOLVED` 邮件均已通过受控演练验证。
+- DiskSpaceWarning 已部署并完成邮件通知验证：默认使用率阈值为 80%、持续 10 分钟、`severity=warning`，并排除伪文件系统；特殊主机使用单独阈值策略。
+- Alertmanager 已部署并被 Prometheus 识别；NodeDown 与 DiskSpaceWarning 的 SMTP `FIRING` 与 `RESOLVED` 邮件均已通过受控演练验证。中文 HTML 模板已启用，并在 `public_ip` 缺失时显示“无”。
 
 ## 尚未作为完成项归档
 
 - Blackbox Exporter、云厂商指标和全量节点接入尚未完成。
-- 邮件内容模板优化、钉钉/Webhook 等额外通知渠道尚未完成。
+- 钉钉/Webhook、告警抑制、CPU/内存等额外规则尚未完成。
 - Grafana Dashboard JSON 尚未导出为 provisioning 文件。
 - Prometheus TSDB 的一致性备份与恢复演练尚未完成。
 - Gateway 自动恢复重启演练尚未完成；当前状态为 `CONFIGURED / PENDING REBOOT VALIDATION`，不得标记为 DONE。

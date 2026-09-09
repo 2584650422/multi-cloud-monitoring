@@ -1,0 +1,37 @@
+{{ define "email.subject" -}}
+[{{ .Status | toUpper }}:{{ len .Alerts }}]
+{{- if .CommonLabels.alertname }} {{ .CommonLabels.alertname }}{{ else }} Prometheus Alert{{ end }}
+{{- if .CommonLabels.env }} [{{ .CommonLabels.env }}]{{ end }}
+{{- end }}
+
+{{ define "email.html" }}
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #333333;">
+  <h2>{{ if eq .Status "firing" }}Prometheus 告警通知{{ else }}Prometheus 告警恢复{{ end }}</h2>
+  <p>当前状态：<strong>{{ .Status | toUpper }}</strong></p>
+
+  {{ range .Alerts }}
+  <table cellpadding="6" cellspacing="0" border="1" style="border-collapse: collapse; margin-bottom: 20px; min-width: 650px;">
+    <tr><td><strong>告警名称</strong></td><td>{{ index .Labels "alertname" }}</td></tr>
+    <tr><td><strong>告警级别</strong></td><td>{{ with index .Labels "severity" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>主机名称</strong></td><td>{{ with index .Labels "host" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>云厂商</strong></td><td>{{ with index .Labels "cloud" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>环境</strong></td><td>{{ with index .Labels "env" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>私网 IP</strong></td><td>{{ with index .Labels "private_ip" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>公网 IP</strong></td><td>{{ with index .Labels "public_ip" }}{{ . }}{{ else }}无{{ end }}</td></tr>
+    <tr><td><strong>监控地址</strong></td><td>{{ with index .Labels "instance" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    {{ if index .Labels "mountpoint" }}
+    <tr><td><strong>挂载点</strong></td><td>{{ index .Labels "mountpoint" }}</td></tr>
+    <tr><td><strong>设备</strong></td><td>{{ with index .Labels "device" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>文件系统</strong></td><td>{{ with index .Labels "fstype" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    {{ end }}
+    <tr><td><strong>摘要</strong></td><td>{{ with index .Annotations "summary" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>详情</strong></td><td>{{ with index .Annotations "description" }}{{ . }}{{ else }}-{{ end }}</td></tr>
+    <tr><td><strong>开始时间</strong></td><td>{{ .StartsAt }}</td></tr>
+  </table>
+  {{ end }}
+</body>
+</html>
+{{ end }}
