@@ -106,7 +106,7 @@ Node Exporter 恢复 → up = 1 → Normal
 
 ## Alertmanager 与邮件通知
 
-Alertmanager 仅监听 `127.0.0.1:9093`。当前已验证 NodeDown 与 DiskSpaceWarning 的 FIRING/RESOLVED 邮件；真实 SMTP 配置不进 Git。中文模板、规则和特殊磁盘阈值见 [Alertmanager 配置](08-alertmanager-configuration.md) 与 [Prometheus 告警规则](09-alert-rules.md)。
+Alertmanager 仅监听 `127.0.0.1:9093`。当前已验证 NodeDown 与 `DiskSpaceUsageHigh`（Warning、Critical、Critical 抑制 Warning、Warning 独立通知）的 FIRING/RESOLVED 邮件；真实 SMTP 配置不进 Git。中文模板、规则和特殊磁盘阈值见 [Alertmanager 配置](08-alertmanager-configuration.md) 与 [Prometheus 告警规则](09-alert-rules.md)。
 
 ```bash
 # 配置检查
@@ -121,6 +121,15 @@ curl -fsS http://127.0.0.1:9093/-/ready
 curl -fsS http://127.0.0.1:9090/api/v1/alertmanagers
 curl -fsS http://127.0.0.1:9093/api/v2/alerts
 ```
+
+检查磁盘告警的当前状态时，可分别查询两个严重级别：
+
+```bash
+curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=ALERTS%7Balertname%3D%22DiskSpaceUsageHigh%22%7D'
+curl -fsS 'http://127.0.0.1:9093/api/v2/alerts'
+```
+
+Prometheus 可能同时显示 Warning 与 Critical 为 Firing；若两者的 `alertname`、`host`、`mountpoint` 相同，Alertmanager 应仅通知 Critical。详情见 [告警规则](09-alert-rules.md)。
 
 修改 Alertmanager 配置后，依次检查语法并 reload：
 

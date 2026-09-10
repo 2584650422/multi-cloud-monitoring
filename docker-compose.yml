@@ -19,6 +19,7 @@ services:
       - /data/docker/monitoring/prometheus/rules:/etc/prometheus/rules:ro,Z
       - /data/docker/monitoring/prometheus/targets:/etc/prometheus/targets:ro,Z
       - /data/docker/monitoring/prometheus/data:/prometheus:Z
+      # 宿主机时区；Prometheus、Alertmanager、Grafana 三项服务均需保留
       - type: bind
         source: /etc/localtime
         target: /etc/localtime
@@ -60,6 +61,7 @@ services:
           create_host_path: false
           selinux: Z
       - /data/docker/monitoring/alertmanager/data:/alertmanager:Z
+      # 宿主机时区；邮件时间仍由模板使用 tz/date 显式转换为北京时间
       - type: bind
         source: /etc/localtime
         target: /etc/localtime
@@ -106,6 +108,7 @@ services:
       - /data/docker/monitoring/grafana/provisioning/plugins:/etc/grafana/provisioning/plugins:ro,Z
       - /data/docker/monitoring/grafana/data:/var/lib/grafana:Z
       - /data/docker/monitoring/grafana/logs:/var/log/grafana:Z
+      # 宿主机时区；与 Prometheus、Alertmanager 保持一致
       - type: bind
         source: /etc/localtime
         target: /etc/localtime

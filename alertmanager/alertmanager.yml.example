@@ -8,6 +8,8 @@ global:
   smtp_auth_password: "<SMTP_AUTH_PASSWORD>"
   smtp_require_tls: true
 
+# The active templates directory must contain exactly one file defining
+# email.subject/email.html. Deploy email.tmpl only.
 templates:
   - '/etc/alertmanager/templates/*.tmpl'
 
@@ -20,6 +22,19 @@ route:
   group_wait: 10s
   group_interval: 30s
   repeat_interval: 1h
+
+# For the same alertname, host and mountpoint, a Critical alert suppresses its
+# Warning notification. Prometheus still evaluates both alert series; only the
+# lower-severity notification is inhibited.
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal:
+      - alertname
+      - host
+      - mountpoint
 
 receivers:
   - name: email

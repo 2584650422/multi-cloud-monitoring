@@ -116,7 +116,7 @@ private_ip  云 VPC 私网地址
 
 `10.250.0.102` 是 Gateway 自身的 Overlay 地址，不是下游节点的 target。Gateway 路由、FORWARD 与 SNAT 的配置顺序见 [WireGuard Gateway 部署](02-wireguard-gateway.md)。
 
-在监控机上从模板创建本地 target 文件（名称必须匹配 `*-node.yml`），填写真实私网 IP 与资产名后再检查配置：
+在监控机上从模板创建本地 target 文件（名称必须匹配 `*-node.yml`），逐条替换模板中的模拟私网 IP 与资产名后再检查配置。每台主机使用独立条目，避免把不同的 `host`、`private_ip` 标签错误地共用：
 
 ```bash
 cp /data/docker/monitoring/prometheus/targets/tencent-node.yml.example \

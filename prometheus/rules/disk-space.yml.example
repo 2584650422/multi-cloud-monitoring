@@ -1,40 +1,171 @@
-# Sanitized structure of the production disk-space policy. Copy this file to
-# disk-space.yml on the monitoring Hub, then replace special-host placeholders.
-groups:
-  - name: node-filesystem
-    rules:
-      # Default policy: 80% used for 10 minutes. If special thresholds are
-      # configured below, exclude those hosts here to prevent duplicate alerts.
-      - alert: DiskSpaceWarning
-        expr: |
-          (
-            1 - (
-              node_filesystem_avail_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host!~"<SPECIAL_HOST_REGEX>"}
-              /
-              node_filesystem_size_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host!~"<SPECIAL_HOST_REGEX>"}
-            )
-          ) * 100 > 80
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "{{ $labels.host }} 磁盘空间使用率过高"
-          description: "{{ $labels.host }}（{{ $labels.instance }}）挂载点 {{ $labels.mountpoint }} 使用率已超过 80%，当前 {{ printf \"%.2f\" $value }}%。"
+# Desensitized, runnable model of the active node-disk policy.
+# Replace demo host names with approved local inventory before deployment.
+#
+# Threshold tiers:
+#   default hosts       warning >80% for 10m, critical >90% for 5m
+#   demo-db-*           warning >90% for 10m, critical >95% for 5m
+#   demo-storage-*      warning >95% for 10m, critical >98% for 5m
+#
+# Warning and Critical intentionally share the alertname
+# DiskSpaceUsageHigh. Their severity label drives notification and inhibition.
+# Each label_replace() branch adds the effective threshold to the alert result,
+# so the notification can show the actual threshold without a policy label or
+# six separate alert rules.
+#
+# If a host label contains a literal IP address, escape literal dots in a
+# PromQL regex, for example: host=~"node-198\\.51\\.100\\.10|node-198\\.51\\.100\\.11"
 
-      # Example of a host group with a different threshold. Replace both the
-      # regex and threshold; keep the default rule's host!~ exclusion aligned.
-      - alert: DiskSpaceWarningSpecial
+groups:
+  - name: node-disk-alerts
+    rules:
+      # ============================================================
+      # Disk Warning
+      # ============================================================
+      - alert: DiskSpaceUsageHigh
         expr: |
-          (
-            1 - (
-              node_filesystem_avail_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host=~"<SPECIAL_HOST_REGEX>"}
-              /
-              node_filesystem_size_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs",host=~"<SPECIAL_HOST_REGEX>"}
-            )
-          ) * 100 > <SPECIAL_THRESHOLD_PERCENT>
+          label_replace(
+            (
+              (
+                1 - (
+                  node_filesystem_avail_bytes{
+                    job="node-exporter",
+                    host!~"demo-db-01|demo-db-02|demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporter",
+                    host!~"demo-db-01|demo-db-02|demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                )
+              ) * 100 > 80
+            ),
+            "threshold", "80", "host", ".*"
+          )
+          or
+          label_replace(
+            (
+              (
+                1 - (
+                  node_filesystem_avail_bytes{
+                    job="node-exporter",
+                    host=~"demo-db-01|demo-db-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporter",
+                    host=~"demo-db-01|demo-db-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                )
+              ) * 100 > 90
+            ),
+            "threshold", "90", "host", ".*"
+          )
+          or
+          label_replace(
+            (
+              (
+                1 - (
+                  node_filesystem_avail_bytes{
+                    job="node-exporter",
+                    host=~"demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporter",
+                    host=~"demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                )
+              ) * 100 > 95
+            ),
+            "threshold", "95", "host", ".*"
+          )
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "{{ $labels.host }} 磁盘空间使用率过高"
-          description: "{{ $labels.host }}（{{ $labels.instance }}）挂载点 {{ $labels.mountpoint }} 达到特殊阈值，当前 {{ printf \"%.2f\" $value }}%。"
+          summary: "{{ $labels.host }} 磁盘使用率过高"
+          metric_name: "磁盘使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: '磁盘使用率 > {{ $labels.threshold }}%，持续 10 分钟'
+
+      # ============================================================
+      # Disk Critical
+      # ============================================================
+      - alert: DiskSpaceUsageHigh
+        expr: |
+          label_replace(
+            (
+              (
+                1 - (
+                  node_filesystem_avail_bytes{
+                    job="node-exporter",
+                    host!~"demo-db-01|demo-db-02|demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporter",
+                    host!~"demo-db-01|demo-db-02|demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                )
+              ) * 100 > 90
+            ),
+            "threshold", "90", "host", ".*"
+          )
+          or
+          label_replace(
+            (
+              (
+                1 - (
+                  node_filesystem_avail_bytes{
+                    job="node-exporter",
+                    host=~"demo-db-01|demo-db-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporter",
+                    host=~"demo-db-01|demo-db-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                )
+              ) * 100 > 95
+            ),
+            "threshold", "95", "host", ".*"
+          )
+          or
+          label_replace(
+            (
+              (
+                1 - (
+                  node_filesystem_avail_bytes{
+                    job="node-exporter",
+                    host=~"demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                  /
+                  node_filesystem_size_bytes{
+                    job="node-exporter",
+                    host=~"demo-storage-01|demo-storage-02",
+                    fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+                  }
+                )
+              ) * 100 > 98
+            ),
+            "threshold", "98", "host", ".*"
+          )
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.host }} 磁盘空间严重不足"
+          metric_name: "磁盘使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: '磁盘使用率 > {{ $labels.threshold }}%，持续 5 分钟'

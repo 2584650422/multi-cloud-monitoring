@@ -195,6 +195,60 @@ docker compose logs --tail=200 grafana
 
 本案例的关键经验是：先确认 UI、Explore 和容器内 provisioning 事实，再决定是否修改声明式配置；不要因为误判删除可复现的数据源配置。
 
+## Case 4：磁盘 Critical 邮件时间显示 UTC、表格内框线不明显
+
+- Status: Resolved and verified
+
+### 现象
+
+完成 `DiskSpaceUsageHigh{severity="critical"}` 受控演练后，邮件正文出现两类展示问题：
+
+```text
+开始时间：2026-09-09 10:09:35.496 +0000 UTC
+```
+
+同时，部分邮箱只显示表格外框，单元格之间的横线和竖线不明显。
+
+### 原因
+
+模板直接输出 `.StartsAt` / `.EndsAt` 时，会按告警对象携带的 UTC 时区格式化；这不是规则触发时间错误。`/etc/localtime` 挂载可以统一容器运行环境，但不能保证 Alertmanager 的时间对象在模板输出时自动转换。仅设置容器 `TZ` 也不能替代展示层转换。
+
+邮件客户端对 HTML `border="1"` 的支持不完全一致，只给 `<table>` 设置边框时，内部 `<td>` 边框可能被弱化。
+
+### 修复
+
+最终模板使用 `tz` + `date` 在展示层转换时间：
+
+```gotemplate
+{{ date "2006-01-02 15:04:05" (tz "Asia/Shanghai" .StartsAt) }}（北京时间）
+{{ date "2006-01-02 15:04:05" (tz "Asia/Shanghai" .EndsAt) }}（北京时间）
+```
+
+重构后的模板还将单条事件拆为“告警信息、实例信息、时间信息、技术信息”四个区块；FIRING 与 RESOLVED 复用 `email.alert`，但仍分别分组展示。用于邮件展示的通用 annotations 是 `summary`、`metric_name`、`current_value`、`condition`；已移除冗余的 `description`。
+
+表格单元格继续使用显式边框，例如：
+
+```html
+style="border:1px solid #bdbdbd; padding:7px;"
+```
+
+FIRING 区块保留 `StartsAt`；RESOLVED 区块保留 `StartsAt` 和 `EndsAt`。生产目录只能放一个定义 `email.subject` / `email.html` 的 `*.tmpl` 文件，避免 `email.tmpl` 与维护源文件 `email-edit.tmpl` 同时加载产生重复定义。
+
+### 验证
+
+```bash
+docker run --rm \
+  -v /data/docker/monitoring/alertmanager:/etc/alertmanager:ro,Z \
+  --entrypoint /bin/amtool \
+  prom/alertmanager:v0.28.0 \
+  check-config /etc/alertmanager/alertmanager.yml
+
+docker compose restart alertmanager
+docker compose logs --tail=200 alertmanager
+```
+
+已通过受控 Critical、Warning 单独通知和 Critical 恢复后的混合通知验证：邮件显示 `（北京时间）`，FIRING/RESOLVED 分组、内部表格线与恢复时间均正常。
+
 ## 通用：容器启动失败
 
 ```bash

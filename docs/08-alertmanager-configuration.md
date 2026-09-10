@@ -1,6 +1,6 @@
 # Alertmanager 配置与邮件通知
 
-本项目已在阿里监控 Hub 验证 NodeDown 与 DiskSpaceWarning 的完整通知链路；邮件使用中文 HTML 模板，并支持资产没有公网 IP 的情况。
+本项目已在阿里监控 Hub 验证 NodeDown 与 `DiskSpaceUsageHigh`（`severity=warning|critical`）的通知链路；邮件使用中文 HTML 模板，并支持资产没有公网 IP 的情况。磁盘告警完成分级、抑制、Warning 单独通知以及 FIRING / RESOLVED 混合通知演练后，邮件模板已重构为通用告警事件布局，并已验证北京时间展示。
 
 ```text
 测试 Node Exporter 停止
@@ -14,7 +14,7 @@
 → SMTP 发送 RESOLVED 邮件
 ```
 
-真实 SMTP 主机、账户、密码、收件人均不进入 Git。仓库保留 [Alertmanager 脱敏配置](../alertmanager/alertmanager.yml.example) 和不含机密的 [中文邮件模板](../alertmanager/templates/email.tmpl)；规则定义见 [Prometheus 告警规则](09-alert-rules.md)。
+真实 SMTP 主机、账户、密码、收件人均不进入 Git。仓库保留 [Alertmanager 脱敏配置](../alertmanager/alertmanager.yml.example)、[可部署模板](../alertmanager/templates/email.tmpl) 和保持展开排版的[维护源文件](../alertmanager/templates/email-edit.tmpl)；两份模板内容同步，规则定义见 [Prometheus 告警规则](09-alert-rules.md)。
 
 ## 1. 组件边界与监听地址
 
@@ -75,6 +75,34 @@ chmod 0640 alertmanager/alertmanager.yml
 | `repeat_interval` | `1h` | 未恢复的同组告警每小时重复提醒。 |
 | `send_resolved` | `true` | 之前已通知的告警恢复后发送恢复邮件。 |
 
+### 磁盘告警的分级与抑制
+
+当前磁盘规则的 Warning 与 Critical 使用同一个 `alertname`：
+
+```text
+DiskSpaceUsageHigh
+```
+
+它们仅通过 `severity=warning` / `severity=critical` 区分。因此 Alertmanager 可以对同一主机、同一挂载点执行抑制：
+
+```yaml
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal:
+      - alertname
+      - host
+      - mountpoint
+```
+
+Critical 是 source，Warning 是 target；只有 `alertname`、`host`、`mountpoint` 都相同时，Critical 才抑制对应 Warning。Prometheus 仍会保留两条 Firing series，抑制只阻止 Warning 邮件，不会删除规则状态。
+
+`group_by` 刻意不包含 `severity`。当磁盘从 Critical 降回 Warning 时，Alertmanager 会把同一通知组的变化合并：邮件可能同时显示 Warning 的“正在告警”和 Critical 的“已恢复”。这是已完成验证的预期行为，不是重复通知。
+
+新告警或同一告警组发生状态变化后，邮件不会保证即时到达：Prometheus 需等待下次 rule evaluation 与 `for`，Alertmanager 还会应用 `group_wait` 或 `group_interval`。在受控磁盘演练中，规则页面变化后约 1～2 分钟收到邮件属于预期范围，而不是网络故障。
+
 ## 3. 自定义 HTML 邮件模板
 
 模板文件存在并不等于 Alertmanager 会加载它。Compose 必须将宿主机目录挂载到容器，并且 `alertmanager.yml` 顶层必须声明 `templates`：
@@ -90,6 +118,25 @@ templates:
 - /data/docker/monitoring/alertmanager/templates:/etc/alertmanager/templates:ro,Z
 ```
 
+Compose 同时为 Prometheus、Alertmanager、Grafana 挂载宿主机时区文件：
+
+```yaml
+- /etc/localtime:/etc/localtime:ro
+```
+
+这是容器运行环境的时区基线，但不能代替模板对告警时间对象的显式转换。
+
+部署后可分别核对宿主机和容器的本地时区：
+
+```bash
+date
+docker exec alertmanager date
+docker exec prometheus date
+docker exec grafana date
+```
+
+这些命令用于确认运行环境一致；邮件中的 `StartsAt` / `EndsAt` 仍以模板显式转换结果为准。
+
 在监控 Hub 上创建目录并复制模板。真实模板可在本机调整，不能含 SMTP 密钥：
 
 ```bash
@@ -99,9 +146,55 @@ install -o root -g root -m 0644 \
   /data/docker/monitoring/alertmanager/templates/email.tmpl
 ```
 
-配置中的 `headers.Subject` 与 `html` 分别引用模板定义的 `email.subject` 和 `email.html`。模板统一展示 `alertname`、`severity`、`host`、`cloud`、`env`、`private_ip`、`public_ip`、`instance`、`summary` 与 `description`；磁盘告警附加展示 `mountpoint`、`device`、`fstype`。
+配置中的 `headers.Subject` 与 `html` 分别引用模板定义的 `email.subject` 和 `email.html`。模板不会直接混合遍历 `.Alerts`：它分别使用 `.Alerts.Firing` 和 `.Alerts.Resolved`，显示“正在告警（N）”与“已恢复（N）”。
+
+当前仓库以 `email-edit.tmpl` 的展开式结构维护，并将同一内容同步到可直接部署的 `email.tmpl`。生产 `templates/` 目录只能安装 `email.tmpl`：两个文件都定义 `email.subject`、`email.html`，同时被 `*.tmpl` 加载会产生重复定义。
+
+模板以 `email.alert` 渲染单条告警，再分别遍历 `.Alerts.Firing` 与 `.Alerts.Resolved`。这样只维护一份详情布局，仍能明确显示“正在告警（N）”与“已恢复（N）”。每条告警按以下顺序展示：
+
+```text
+摘要标题
+├─ 告警信息：级别、监控指标、当前值/最近告警值、触发条件、可选磁盘字段
+├─ 实例信息：主机、环境、云厂商、私网 IP、可选公网 IP
+├─ 时间信息：触发时间，已恢复时额外显示恢复时间
+└─ 技术信息：规则标识、采集地址
+```
+
+规则 annotations 的通用数据契约为：
+
+```yaml
+annotations:
+  summary: "一句话说明发生了什么"
+  metric_name: "监控指标名称"
+  current_value: "当前或最近告警值"
+  condition: "触发阈值和持续时间"
+```
+
+`description` 不再是该模板的数据契约；磁盘的 `mountpoint`、`device`、`fstype` 继续来自指标标签，只有存在时才显示。规则内部 severity 值保持 `warning` / `critical`；展示层将它们渲染为“警告（Warning）”和“严重（Critical）”。`cloud=tencent|aliyun` 与 `env=prod|test` 也仅在展示层转换为中文。
+
+邮件主题使用“【告警】/【恢复】+ 主机 + 指标 + 环境”的可读格式；多告警通知没有共同主机或指标时，模板会自动回退到共同摘要或 Prometheus 规则名。模板使用嵌套 table 和 inline style，避免依赖邮件客户端不稳定的 CSS；FIRING 使用红色、RESOLVED 使用绿色。
 
 `public_ip` 是可选 target label：有公网 IP 的资产显示实际值；未定义该 label 时模板显示“无”。因此没有公网 IP 的 target 不要为了模板写入空字符串标签。
+
+### Critical 实测后的时间显示修复
+
+Critical 告警实测时，直接写：
+
+```gotemplate
+{{ .StartsAt }}
+{{ .EndsAt }}
+```
+
+邮件可能显示类似 `2026-09-09 10:09:35 +0000 UTC`。这不是 Prometheus 规则判断错误，而是通知对象中的 `time.Time` 仍携带 UTC 信息，直接输出会保留原时区。容器 `/etc/localtime` 挂载只影响容器本地运行环境，不能可靠改变这个时间对象的格式化结果。
+
+仓库模板改为在展示层显式转换：
+
+```gotemplate
+{{ date "2006-01-02 15:04:05" (tz "Asia/Shanghai" .StartsAt) }}（北京时间）
+{{ date "2006-01-02 15:04:05" (tz "Asia/Shanghai" .EndsAt) }}（北京时间）
+```
+
+FIRING 必须保留 `StartsAt`；RESOLVED 必须同时保留 `StartsAt` 与 `EndsAt`。`EndsAt` 是恢复时间，不能为了简化模板删除。
 
 ## 4. 检查、启动与 reload
 
@@ -175,7 +268,7 @@ curl -fsS http://127.0.0.1:9093/api/v2/alerts
 systemctl start node_exporter
 ```
 
-预期：`up{job="node-exporter"}` 变为 `0`，NodeDown 先 Pending，超过两分钟进入 Firing；Alertmanager 收到 active alert 并发送 FIRING 邮件。服务恢复后 `up` 回到 `1`、Prometheus 规则页为 Normal，Alertmanager 根据 `send_resolved: true` 发送 RESOLVED 邮件。DiskSpaceWarning 也已完成邮件通知验证；不要通过写满生产文件系统来复现实验。
+预期：`up{job="node-exporter"}` 变为 `0`，NodeDown 先 Pending，超过两分钟进入 Firing；Alertmanager 收到 active alert 并发送 FIRING 邮件。服务恢复后 `up` 回到 `1`、Prometheus 规则页为 Normal，Alertmanager 根据 `send_resolved: true` 发送 RESOLVED 邮件。`DiskSpaceUsageHigh` 的 Warning、Critical、Critical 抑制 Warning 和 Warning 独立通知也已完成受控验证；不要通过写满生产文件系统来复现实验。
 
 ## 6. 常见排查
 

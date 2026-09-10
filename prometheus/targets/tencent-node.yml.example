@@ -1,17 +1,56 @@
-# Copy this file to a local *-node.yml file on the monitoring host, then replace
-# all placeholders. Local target inventories are intentionally excluded from Git.
+# Desensitized multi-node inventory example. Copy this file to a local
+# *-node.yml on the monitoring Hub, then replace every simulated address and
+# asset name. The private IPs below are examples only.
+#
+# Keep one target per block when host/private_ip differ: labels on a block are
+# applied to every target in that block, so combining these hosts would make
+# their asset labels incorrect.
 - targets:
-    - "<TENCENT_NODE_01_PRIVATE_IP>:9100"
+    - "172.20.10.11:9100"
   labels:
-    host: "tc-prod-node-01"
+    host: "tc-prod-app-01"
     cloud: "tencent"
     env: "prod"
-    private_ip: "<TENCENT_NODE_01_PRIVATE_IP>"
+    private_ip: "172.20.10.11"
 
 - targets:
-    - "<TENCENT_NODE_02_PRIVATE_IP>:9100"
+    - "172.20.10.12:9100"
   labels:
-    host: "tc-prod-node-02"
+    host: "tc-prod-app-02"
     cloud: "tencent"
     env: "prod"
-    private_ip: "<TENCENT_NODE_02_PRIVATE_IP>"
+    private_ip: "172.20.10.12"
+
+- targets:
+    - "172.20.20.21:9100"
+  labels:
+    host: "demo-db-01"
+    cloud: "tencent"
+    env: "prod"
+    private_ip: "172.20.20.21"
+    public_ip: "203.0.113.21"
+
+- targets:
+    - "172.20.20.22:9100"
+  labels:
+    host: "demo-db-02"
+    cloud: "tencent"
+    env: "prod"
+    private_ip: "172.20.20.22"
+    public_ip: "203.0.113.22"
+
+- targets:
+    - "172.20.30.31:9100"
+  labels:
+    host: "demo-storage-01"
+    cloud: "tencent"
+    env: "prod"
+    private_ip: "172.20.30.31"
+
+- targets:
+    - "172.20.30.32:9100"
+  labels:
+    host: "demo-storage-02"
+    cloud: "tencent"
+    env: "prod"
+    private_ip: "172.20.30.32"

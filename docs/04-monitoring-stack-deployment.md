@@ -74,7 +74,7 @@ install -o root -g root -m 0644 prometheus/targets/tencent-node.yml.example \
 install -o root -g root -m 0644 prometheus/rules/node-down.yml \
   /data/docker/monitoring/prometheus/rules/node-down.yml
 install -o root -g root -m 0644 prometheus/rules/disk-space.yml.example \
-  /data/docker/monitoring/prometheus/rules/disk-space.yml.example
+  /data/docker/monitoring/prometheus/rules/node-disk.yml.example
 
 install -o root -g root -m 0644 alertmanager/alertmanager.yml.example \
   /data/docker/monitoring/alertmanager/alertmanager.yml.example
@@ -98,6 +98,16 @@ cp /data/docker/monitoring/prometheus/targets/tencent-node.yml.example \
 vi /data/docker/monitoring/prometheus/targets/tencent-node.yml
 ```
 
+从脱敏磁盘规则示例创建仅保留在监控机的真实规则。生产文件名与当前运行路径保持一致：
+
+```bash
+cp /data/docker/monitoring/prometheus/rules/node-disk.yml.example \
+  /data/docker/monitoring/prometheus/rules/node-disk.yml
+vi /data/docker/monitoring/prometheus/rules/node-disk.yml
+```
+
+替换 `demo-*` 主机组后，保留 `DiskSpaceUsageHigh` 作为 Warning 与 Critical 共同的 alertname，保留 `severity=warning|critical`，并同时更新 Alertmanager 的 `inhibit_rules`。详细模型和验证流程见 [告警规则](09-alert-rules.md)。
+
 从 Alertmanager 模板创建只存在于监控机的真实配置，并填入 SMTP 信息与收件人：
 
 ```bash
@@ -108,7 +118,9 @@ vi /data/docker/monitoring/alertmanager/alertmanager.yml
 
 上面的同步步骤已经将仓库中的 `alertmanager/templates/email.tmpl` 安装到生产模板目录。它不含 SMTP 凭据，可以由 Git 管理；修改后需连同 `alertmanager.yml` 一起执行 `amtool check-config` 并 reload Alertmanager，详见 [Alertmanager 配置](08-alertmanager-configuration.md)。
 
-`tencent-node.yml` 含私网地址和资产名称；`alertmanager.yml` 含 SMTP 凭据和收件人地址。两者必须保持在 Git 忽略列表中。NodeDown 已作为真实规则随仓库部署；磁盘规则使用脱敏结构，必须在监控 Hub 将 special host placeholder 替换为审批后的本地策略，详见 [告警规则](09-alert-rules.md)。
+仓库以 `alertmanager/templates/email-edit.tmpl` 的展开结构维护，并同步生成可部署的 `email.tmpl`。它们定义相同的 `email.subject`、`email.html` 名称，不能把两个文件同时复制到正在使用的 `templates/` 目录；否则 `templates: '*.tmpl'` 会加载重复定义。生产只安装 `email.tmpl`；模板变更后按 [Alertmanager 配置](08-alertmanager-configuration.md) 的检查与 reload 流程生效。
+
+`tencent-node.yml` 含私网地址和资产名称；`alertmanager.yml` 含 SMTP 凭据和收件人地址。两者必须保持在 Git 忽略列表中。NodeDown 已作为真实规则随仓库部署；磁盘规则示例使用 `demo-*` 主机名和模拟 IP，必须在监控 Hub 替换为审批后的本地策略，详见 [告警规则](09-alert-rules.md)。
 
 ## 3. UID、GID 与权限
 
@@ -184,6 +196,18 @@ CentOS SELinux 开启时，Compose 的 `:Z` 会为单个容器私有使用重新
 - `command`：固定各组件的配置路径、数据路径、监听和 lifecycle 参数。
 - `environment`：显式固定 Grafana paths，便于排查 provisioning 和持久化。
 - `logging`：`json-file` 单文件 50 MiB、最多 5 个，避免 Docker 日志无限增长。
+
+### 时区挂载是三项服务的共同基线
+
+Prometheus、Alertmanager、Grafana 三个服务都必须保留以下只读 bind mount：
+
+```yaml
+- /etc/localtime:/etc/localtime:ro
+```
+
+它使容器的系统本地时区与宿主机一致，影响容器内 `date`、部分日志和依赖系统时区的程序行为。删除其中任何一项都会造成运行环境不一致，尤其会增加排查日志时间的难度。该挂载不能替代邮件模板中的时间转换：Alertmanager 的 `.StartsAt` / `.EndsAt` 是携带时区信息的时间对象，直接输出可能仍显示 UTC；邮件模板应使用 `tz "Asia/Shanghai"` 与 `date` 显式渲染北京时间，详见 [Alertmanager 配置](08-alertmanager-configuration.md)。
+
+如需额外显式声明容器环境变量，可在变更评审后增加 `TZ=Asia/Shanghai`；当前仓库基线以宿主机 `/etc/localtime` 只读挂载为准，不应据此省略模板层转换。
 
 主配置文件和 `/etc/localtime` 使用 bind long syntax，并设置 `create_host_path: false`。这样源文件拼错或缺失时 Compose 直接失败，不会静默创建一个同名目录；目录型挂载则由前面的目录创建步骤显式准备。
 
