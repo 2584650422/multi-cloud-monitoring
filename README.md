@@ -20,7 +20,7 @@ Alibaba monitoring hub --+
 2. 按 [Node Exporter 安装](docs/03-node-exporter-installation.md) 安装 exporter，并依据所选网络模式绑定正确监听地址。
 3. 按 [监控栈部署](docs/04-monitoring-stack-deployment.md) 创建目录、权限并部署 Compose。
 4. 按 [Prometheus 配置](docs/05-prometheus-configuration.md) 增加 target、检查配置、reload 并验证 `up`。
-5. 按 [告警规则](docs/09-alert-rules.md) 部署 NodeDown、磁盘空间策略并完成规则检查与 reload。
+5. 按 [告警规则](docs/09-alert-rules.md) 部署 NodeDown、磁盘空间和内存策略并完成规则检查与 reload。
 6. 按 [Alertmanager 配置](docs/08-alertmanager-configuration.md) 配置本地 SMTP、中文邮件模板并完成 FIRING/RESOLVED 邮件演练。
 7. 按 [Grafana 配置](docs/06-grafana-configuration.md) 验证 datasource provisioning 和 Dashboard。
 

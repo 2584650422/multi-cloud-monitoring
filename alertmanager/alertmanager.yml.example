@@ -23,18 +23,28 @@ route:
   group_interval: 30s
   repeat_interval: 1h
 
-# For the same alertname, host and mountpoint, a Critical alert suppresses its
-# Warning notification. Prometheus still evaluates both alert series; only the
-# lower-severity notification is inhibited.
+# Critical alerts suppress their corresponding Warning notification. Prometheus
+# still evaluates both series; only the lower-severity notification is inhibited.
 inhibit_rules:
+  # Disk is a filesystem-level alert: / and /data on one host are distinct.
   - source_matchers:
+      - alertname="DiskSpaceUsageHigh"
       - severity="critical"
     target_matchers:
+      - alertname="DiskSpaceUsageHigh"
       - severity="warning"
     equal:
-      - alertname
       - host
       - mountpoint
+  # Memory is a host-level alert and has no mountpoint label.
+  - source_matchers:
+      - alertname="MemoryUsageHigh"
+      - severity="critical"
+    target_matchers:
+      - alertname="MemoryUsageHigh"
+      - severity="warning"
+    equal:
+      - host
 
 receivers:
   - name: email

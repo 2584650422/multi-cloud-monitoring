@@ -87,17 +87,29 @@ DiskSpaceUsageHigh
 
 ```yaml
 inhibit_rules:
+  # Disk：同一主机、同一挂载点
   - source_matchers:
+      - alertname="DiskSpaceUsageHigh"
       - severity="critical"
     target_matchers:
+      - alertname="DiskSpaceUsageHigh"
       - severity="warning"
     equal:
-      - alertname
       - host
       - mountpoint
+
+  # Memory：同一主机
+  - source_matchers:
+      - alertname="MemoryUsageHigh"
+      - severity="critical"
+    target_matchers:
+      - alertname="MemoryUsageHigh"
+      - severity="warning"
+    equal:
+      - host
 ```
 
-Critical 是 source，Warning 是 target；只有 `alertname`、`host`、`mountpoint` 都相同时，Critical 才抑制对应 Warning。Prometheus 仍会保留两条 Firing series，抑制只阻止 Warning 邮件，不会删除规则状态。
+Critical 是 source，Warning 是 target。磁盘只有同一 `host + mountpoint` 才会匹配；内存只要求同一 `host`。Prometheus 仍会保留两条 Firing series，抑制只阻止 Warning 邮件，不会删除规则状态。
 
 `group_by` 刻意不包含 `severity`。当磁盘从 Critical 降回 Warning 时，Alertmanager 会把同一通知组的变化合并：邮件可能同时显示 Warning 的“正在告警”和 Critical 的“已恢复”。这是已完成验证的预期行为，不是重复通知。
 

@@ -106,7 +106,7 @@ Node Exporter 恢复 → up = 1 → Normal
 
 ## Alertmanager 与邮件通知
 
-Alertmanager 仅监听 `127.0.0.1:9093`。当前已验证 NodeDown 与 `DiskSpaceUsageHigh`（Warning、Critical、Critical 抑制 Warning、Warning 独立通知）的 FIRING/RESOLVED 邮件；真实 SMTP 配置不进 Git。中文模板、规则和特殊磁盘阈值见 [Alertmanager 配置](08-alertmanager-configuration.md) 与 [Prometheus 告警规则](09-alert-rules.md)。
+Alertmanager 仅监听 `127.0.0.1:9093`。当前已验证 NodeDown 与 `DiskSpaceUsageHigh`（Warning、Critical、Critical 抑制 Warning、Warning 独立通知）的 FIRING/RESOLVED 邮件；`MemoryUsageHigh` 已配置为 85% / 95% 两级阈值，端到端演练状态尚未在本仓库记录。真实 SMTP 配置不进 Git。中文模板、规则和特殊磁盘阈值见 [Alertmanager 配置](08-alertmanager-configuration.md) 与 [Prometheus 告警规则](09-alert-rules.md)。
 
 ```bash
 # 配置检查
@@ -130,6 +130,15 @@ curl -fsS 'http://127.0.0.1:9093/api/v2/alerts'
 ```
 
 Prometheus 可能同时显示 Warning 与 Critical 为 Firing；若两者的 `alertname`、`host`、`mountpoint` 相同，Alertmanager 应仅通知 Critical。详情见 [告警规则](09-alert-rules.md)。
+
+检查内存告警：
+
+```bash
+curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=ALERTS%7Balertname%3D%22MemoryUsageHigh%22%7D'
+curl -fsS 'http://127.0.0.1:9090/api/v1/query?query=%28%281-node_memory_MemAvailable_bytes%7Bjob%3D%22node-exporter%22%7D%2Fnode_memory_MemTotal_bytes%7Bjob%3D%22node-exporter%22%7D%29%2A100%29'
+```
+
+内存 Warning 与 Critical 同时 Firing 时，Alertmanager 的内存抑制规则按 `host` 抑制 Warning；它不使用 `mountpoint`。
 
 修改 Alertmanager 配置后，依次检查语法并 reload：
 

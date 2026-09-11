@@ -18,7 +18,7 @@ rule_files:
   - /etc/prometheus/rules/*.yml
 ```
 
-这里只加载真正以 `.yml` 结尾的规则。仓库中的 `node-down.yml` 已启用 `NodeDown` 规则；当前生产环境也已启用磁盘空间规则。规则策略、特殊阈值和验证步骤见 [Prometheus 告警规则](09-alert-rules.md)。
+这里只加载真正以 `.yml` 结尾的规则。仓库中的 `node-down.yml` 与 `node-memory.yml` 分别定义 NodeDown、MemoryUsageHigh；当前生产环境也已启用本地磁盘空间规则。规则策略、特殊阈值和验证步骤见 [Prometheus 告警规则](09-alert-rules.md)。
 
 ## alerting
 

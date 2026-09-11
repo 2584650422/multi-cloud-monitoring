@@ -1,10 +1,10 @@
-# Prometheus 告警规则：NodeDown 与磁盘
+# Prometheus 告警规则：NodeDown、磁盘与内存
 
-本章记录已完成验证的 NodeDown 与磁盘告警策略。真实资产名称、私网地址和 SMTP 凭据不进入 Git；仓库中的 [磁盘规则示例](../prometheus/rules/disk-space.yml.example) 使用脱敏主机名，但规则结构、阈值层级、告警名称和标签模型与当前运行配置一致。
+本章记录 NodeDown、磁盘与内存告警策略。真实资产名称、私网地址和 SMTP 凭据不进入 Git；仓库中的 [磁盘规则示例](../prometheus/rules/disk-space.yml.example) 使用脱敏主机名，但规则结构、阈值层级、告警名称和标签模型与当前运行配置一致。
 
 Prometheus 每个 `evaluation_interval` 执行一次规则评估；表达式持续满足规则的 `for` 时间后，告警才进入 `Firing` 并投递给 Alertmanager。
 
-## 当前已验证策略
+## 当前策略与验证状态
 
 | 规则 | 条件 | 持续时间 | 严重级别 | 状态 |
 | --- | --- | --- | --- | --- |
@@ -12,6 +12,8 @@ Prometheus 每个 `evaluation_interval` 执行一次规则评估；表达式持�
 | `DiskSpaceUsageHigh` / Warning | 按主机组计算的磁盘使用率超过 Warning 阈值 | 10m | `warning` | 已完成独立 Warning 通知演练。 |
 | `DiskSpaceUsageHigh` / Critical | 按主机组计算的磁盘使用率超过 Critical 阈值 | 5m | `critical` | 已完成受控触发和通知演练。 |
 | Critical 抑制 Warning | 同一告警、主机、挂载点存在 Critical | 即时生效于通知层 | — | 已验证：Critical 正常通知，Warning 被抑制。 |
+| `MemoryUsageHigh` / Warning | 内存使用率 >85% | 10m | `warning` | 已配置；端到端告警演练尚未在本仓库记录。 |
+| `MemoryUsageHigh` / Critical | 内存使用率 >95% | 5m | `critical` | 已配置；端到端告警演练尚未在本仓库记录。 |
 
 `severity` 是项目标签，不是 Prometheus 保留关键字。它表示同一个问题的严重程度：`warning` 需要安排处理，`critical` 需要尽快响应。NodeDown 没有自然的“轻微掉线”状态，因此只使用 `critical`。
 
@@ -23,6 +25,11 @@ Prometheus 每个 `evaluation_interval` 执行一次规则评估；表达式持�
   for: 2m
   labels:
     severity: critical
+  annotations:
+    summary: "{{ $labels.host }} 节点采集失败"
+    metric_name: "节点采集状态"
+    current_value: "不可用"
+    condition: "Prometheus 连续 2 分钟无法采集该节点"
 ```
 
 停掉批准测试节点的 Node Exporter 后，状态应依次为：
@@ -33,6 +40,37 @@ up = 0 → Pending →（2 分钟）→ Firing → Alertmanager FIRING 邮件
 ```
 
 `for: 2m` 是防抖窗口，避免一次抓取失败或短暂网络抖动立即产生正式通知。
+
+NodeDown 已统一到邮件模板的通用 annotations 契约，删除了会重复主机、采集地址和条件信息的 `description`。它只保留 `critical`：目标不可采集是明确可用性事件，不需要先发 Warning。
+
+## 内存告警模型
+
+[node-memory.yml](../prometheus/rules/node-memory.yml) 使用 `MemAvailable` 计算内存使用率：
+
+```promql
+(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100
+```
+
+不要用 `MemFree` 作为告警依据。Linux 的可回收 page cache 等并不等同于实际内存压力；`MemAvailable` 更适合判断仍可分配的内存。
+
+当前统一阈值如下，暂不为单独主机引入特殊策略：
+
+| 级别 | 条件 | 持续时间 |
+| --- | --- | --- |
+| Warning | 内存使用率 >85% | 10m |
+| Critical | 内存使用率 >95% | 5m |
+
+两个规则共用 `alert: MemoryUsageHigh`，以 `severity` 和 `threshold` 区分。annotations 与磁盘、NodeDown 使用同一契约：
+
+```yaml
+annotations:
+  summary: "{{ $labels.host }} 内存使用率过高"
+  metric_name: "内存使用率"
+  current_value: '{{ printf "%.1f" $value }}%'
+  condition: '内存使用率 > {{ $labels.threshold }}%，持续 10 分钟'
+```
+
+内存不是文件系统级指标，因此不带 `mountpoint`、`device`、`fstype`。通用邮件模板会自动隐藏这些磁盘专属行。
 
 ## 磁盘告警模型
 
@@ -125,19 +163,31 @@ host=~"node-198\\.51\\.100\\.10|node-198\\.51\\.100\\.11"
 
 ```yaml
 inhibit_rules:
+  # Disk：同主机、同挂载点
   - source_matchers:
+      - alertname="DiskSpaceUsageHigh"
       - severity="critical"
     target_matchers:
+      - alertname="DiskSpaceUsageHigh"
       - severity="warning"
     equal:
-      - alertname
       - host
       - mountpoint
+
+  # Memory：同主机
+  - source_matchers:
+      - alertname="MemoryUsageHigh"
+      - severity="critical"
+    target_matchers:
+      - alertname="MemoryUsageHigh"
+      - severity="warning"
+    equal:
+      - host
 ```
 
 含义是：同一 `DiskSpaceUsageHigh`、同一台主机、同一挂载点的 Critical 正在 Firing 时，Alertmanager 不发送对应 Warning 的通知。Prometheus 中两条规则仍可同时显示为 Firing；抑制只发生在通知层。
 
-`mountpoint` 必须加入 `equal`。同一主机的 `/`、`/data`、`/backup` 是不同文件系统，`/data` 的 Critical 不能压制 `/` 的 Warning。
+`mountpoint` 仅用于磁盘抑制：同一主机的 `/`、`/data`、`/backup` 是不同文件系统，`/data` 的 Critical 不能压制 `/` 的 Warning。内存告警没有 `mountpoint`，因此明确只按 `host` 匹配。
 
 `threshold` 不能加入 `equal`：同一块磁盘的 Warning 与 Critical 本来会携带不同阈值，例如 `80` 与 `90`；它们仍应被视为同一个告警对象。
 
@@ -195,6 +245,7 @@ group_by:
 
 ```text
 /data/docker/monitoring/prometheus/rules/node-disk.yml
+/data/docker/monitoring/prometheus/rules/node-memory.yml
 ```
 
 先检查完整主配置，以便同时验证 `rule_files`、file_sd 和全部规则：
@@ -229,4 +280,4 @@ curl -fsS http://127.0.0.1:9090/api/v1/rules
 
 ## 当前结论
 
-磁盘告警已完成：两级阈值、特殊主机阈值、Critical 抑制 Warning、Warning 独立通知、FIRING/RESOLVED 混合邮件以及通知延迟行为验证。后续可进入 MemoryUsageHigh；CPU、内存等新规则应复用本章的标签模型和检查流程，但阈值必须单独设计与演练。
+磁盘告警已完成：两级阈值、特殊主机阈值、Critical 抑制 Warning、Warning 独立通知、FIRING/RESOLVED 混合邮件以及通知延迟行为验证。内存告警已按相同数据契约与两级阈值配置，后续应补充受控演练；CPU 等新规则应复用本章的标签模型和检查流程，但阈值必须单独设计与演练。

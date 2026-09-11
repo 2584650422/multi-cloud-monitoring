@@ -1,11 +1,15 @@
 groups:
-  - name: node-availability
+  - name: node-availability-alerts
     rules:
+      # Prometheus has continuously failed to scrape a configured node target.
       - alert: NodeDown
-        expr: up{job="node-exporter"} == 0
+        expr: |
+          up{job="node-exporter"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
           summary: "{{ $labels.host }} 节点采集失败"
-          description: "{{ $labels.host }}（{{ $labels.instance }}）已连续 2 分钟无法被 Prometheus 采集"
+          metric_name: "节点采集状态"
+          current_value: "不可用"
+          condition: "Prometheus 连续 2 分钟无法采集该节点"

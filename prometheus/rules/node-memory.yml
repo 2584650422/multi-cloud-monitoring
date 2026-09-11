@@ -1,0 +1,48 @@
+groups:
+  - name: node-memory-alerts
+    rules:
+      # ============================================================
+      # Memory Warning
+      # Memory usage > 85% for 10 minutes.
+      # ============================================================
+      - alert: MemoryUsageHigh
+        expr: |
+          (
+            1 - (
+              node_memory_MemAvailable_bytes{job="node-exporter"}
+              /
+              node_memory_MemTotal_bytes{job="node-exporter"}
+            )
+          ) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          threshold: "85"
+        annotations:
+          summary: "{{ $labels.host }} 内存使用率过高"
+          metric_name: "内存使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: '内存使用率 > {{ $labels.threshold }}%，持续 10 分钟'
+
+      # ============================================================
+      # Memory Critical
+      # Memory usage > 95% for 5 minutes.
+      # ============================================================
+      - alert: MemoryUsageHigh
+        expr: |
+          (
+            1 - (
+              node_memory_MemAvailable_bytes{job="node-exporter"}
+              /
+              node_memory_MemTotal_bytes{job="node-exporter"}
+            )
+          ) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+          threshold: "95"
+        annotations:
+          summary: "{{ $labels.host }} 内存使用率严重过高"
+          metric_name: "内存使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: '内存使用率 > {{ $labels.threshold }}%，持续 5 分钟'

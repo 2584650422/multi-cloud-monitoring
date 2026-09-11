@@ -17,7 +17,7 @@
 
 ## 阶段三：告警与探测
 
-- Alertmanager、SMTP 邮件通知、中文 HTML 邮件模板与 NodeDown/磁盘空间告警已完成；后续按需增加钉钉/Webhook 路由、告警抑制与分级路由。
+- Alertmanager、SMTP 邮件通知、中文 HTML 邮件模板与 NodeDown/磁盘空间告警已完成；MemoryUsageHigh 已配置，待补充端到端演练。后续按需增加钉钉/Webhook 路由、CPU 告警和分级路由。
 - 部署 Blackbox Exporter，监控 HTTP、TCP、DNS 与证书。
 - 建立 CPU、内存、服务可用性告警；主机不可达与磁盘空间告警已完成。
 
