@@ -132,8 +132,10 @@ PRODUCTS = {
         receive_metric="LighthouseIntraffic",
         transmit_metric="LighthouseOuttraffic",
         utilization_metric="LighthouseOutratio",
-        # Tencent documents Lighthouse public traffic in MBytes/s.
-        bandwidth_multiplier=8.0,
+        # GetMonitorData 返回 9.804，对应控制台数据点为 9.804 Mbps，时间为2026-09-22 13:54:00 +08:00。
+        # 发布的 MB/s 单位与此 API 观测值不一致；乘以 8 产生了错误的仪表板数据点 78.432 Mbps。
+        # bandwidth_multiplier=8.0,
+        bandwidth_multiplier=1.0,
     ),
 }
 

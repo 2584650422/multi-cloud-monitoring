@@ -56,9 +56,30 @@ cloud_network_exporter_group_up
 cloud_network_exporter_last_success_timestamp_seconds
 ```
 
-腾讯云 CVM 的 `WanIntraffic` / `WanOuttraffic` 本身是 Mbps；Lighthouse 的
-`LighthouseIntraffic` / `LighthouseOuttraffic` 是 MBytes/s，exporter 乘以 8 后统一为 Mbps。
+腾讯云 CVM 的 `WanIntraffic` / `WanOuttraffic` 本身是 Mbps。腾讯云的
+[Lighthouse 监控指标文档](https://cloud.tencent.com/document/product/248/60127)将
+`LighthouseIntraffic` / `LighthouseOuttraffic` 标为 MBytes/s，但 2026-09-22 13:54:00
+的一次同实例核对中，API 原始入带宽为 `9.804`，控制台为 `9.804 Mbps`；旧版 exporter
+乘以 8 后显示 `78.43 Mbps`。因此当前实现按实测值直接作为 Mbps，不再乘以 8。
 腾讯云利用率返回百分数，exporter 除以 100 后统一为 0～1 比率。
+
+历史上已经写入 Prometheus 的 Lighthouse 带宽样本仍是旧版的 8 倍；重新构建并启动
+exporter 后的新样本才会恢复正确值。
+
+## 监控时间与尖峰持续时间
+
+当前 exporter 请求 `Period=60`。按腾讯云指标文档，这两个 Lighthouse 带宽指标
+在 60 秒粒度使用 `max`，因此 13:54:00 的 10 秒尖峰可能成为整个 13:54 分钟的最大值。
+exporter 每轮只取最近一个非空点并缓存，Prometheus 则按**抓取时间**记录缓存值；
+曲线上显示的时间不是腾讯云原始指标时间。若 exporter 在 13:56 才取得 13:54 的点，
+Grafana 就会在 13:56 附近显示尖峰；缓存到下一轮更新前，曲线也会保持高位。
+[腾讯云 API 常见问题](https://cloud.tencent.com/document/product/248/54788)明确提醒监控数据可能延迟 1～2 分钟。
+
+`cloud_network_metric_timestamp_seconds` 记录当前暴露值对应的原始时间，可用
+`time() - cloud_network_metric_timestamp_seconds` 检查实际滞后。缩短采集周期只会减少
+exporter 自身增加的等待时间，同时增加 API 调用量；不能消除云端上报延迟，也不能把
+60 秒最大值还原成 10 秒曲线。要按原始时间绘制 10 秒尖峰，需要改用 `Period=10`
+并将返回的所有时间点按原始时间戳写入时序库，不能仅调整 Grafana 刷新频率。
 
 每个业务指标带有：
 

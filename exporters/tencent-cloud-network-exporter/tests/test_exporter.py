@@ -125,11 +125,11 @@ instances:
         }
         self.assertEqual(
             REGISTRY.get_sample_value("cloud_network_public_receive_mbps", labels),
-            10.0,
+            1.25,
         )
         self.assertEqual(
             REGISTRY.get_sample_value("cloud_network_public_transmit_mbps", labels),
-            20.0,
+            2.5,
         )
         self.assertEqual(
             REGISTRY.get_sample_value(
