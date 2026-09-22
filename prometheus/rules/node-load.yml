@@ -1,0 +1,59 @@
+groups:
+  - name: node-load-alerts
+    rules:
+      # ============================================================
+      # Load Warning
+      # 1-minute load average per CPU core > 1.5 for 10 minutes.
+      #
+      # node_cpu_seconds_total is a counter, but it is deliberately
+      # counted here (not passed to rate()) to obtain the CPU core count.
+      # ============================================================
+      - alert: LoadPerCoreHigh
+        expr: |
+          (
+            node_load1{job="node-exporter"}
+            /
+            on (instance)
+            count by (instance) (
+              node_cpu_seconds_total{
+                job="node-exporter",
+                mode="idle"
+              }
+            )
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          threshold: "1.5"
+        annotations:
+          summary: "{{ $labels.host }} 系统负载过高"
+          metric_name: "每核 1 分钟平均负载"
+          current_value: '{{ printf "%.2f" $value }}'
+          condition: '每核 1 分钟平均负载 > {{ $labels.threshold }}，持续 10 分钟'
+
+      # ============================================================
+      # Load Critical
+      # 1-minute load average per CPU core > 2.0 for 5 minutes.
+      # ============================================================
+      - alert: LoadPerCoreHigh
+        expr: |
+          (
+            node_load1{job="node-exporter"}
+            /
+            on (instance)
+            count by (instance) (
+              node_cpu_seconds_total{
+                job="node-exporter",
+                mode="idle"
+              }
+            )
+          ) > 2.0
+        for: 5m
+        labels:
+          severity: critical
+          threshold: "2.0"
+        annotations:
+          summary: "{{ $labels.host }} 系统负载严重过高"
+          metric_name: "每核 1 分钟平均负载"
+          current_value: '{{ printf "%.2f" $value }}'
+          condition: '每核 1 分钟平均负载 > {{ $labels.threshold }}，持续 5 分钟'

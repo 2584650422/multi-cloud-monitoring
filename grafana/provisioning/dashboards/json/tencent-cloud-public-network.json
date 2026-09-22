@@ -1,0 +1,154 @@
+{
+  "uid": "tencent-cloud-public-network",
+  "title": "腾讯云公网带宽",
+  "tags": ["tencent", "network", "production"],
+  "timezone": "browser",
+  "schemaVersion": 42,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "cloud",
+        "label": "云厂商",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "definition": "label_values(cloud_network_public_transmit_mbps, cloud)",
+        "query": { "query": "label_values(cloud_network_public_transmit_mbps, cloud)", "refId": "Prometheus-cloud-Variable-Query" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "current": { "text": "tencent", "value": "tencent" }
+      },
+      {
+        "name": "env",
+        "label": "环境",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "definition": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\"}, env)",
+        "query": { "query": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\"}, env)", "refId": "Prometheus-env-Variable-Query" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "product",
+        "label": "产品",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "definition": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\"}, product)",
+        "query": { "query": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\"}, product)", "refId": "Prometheus-product-Variable-Query" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "region",
+        "label": "地域",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "definition": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\"}, region)",
+        "query": { "query": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\"}, region)", "refId": "Prometheus-region-Variable-Query" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "host",
+        "label": "主机",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "definition": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\"}, host)",
+        "query": { "query": "label_values(cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\"}, host)", "refId": "Prometheus-host-Variable-Query" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "当前公网入带宽（汇总）",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "refId": "A", "expr": "sum(cloud_network_public_receive_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})" }],
+      "fieldConfig": { "defaults": { "unit": "Mbps", "decimals": 2, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "当前公网出带宽（汇总）",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "refId": "A", "expr": "sum(cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})" }],
+      "fieldConfig": { "defaults": { "unit": "Mbps", "decimals": 2, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "最高出口带宽利用率",
+      "description": "腾讯云 Outratio / LighthouseOutratio，非自行推算。",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "refId": "A", "expr": "max(cloud_network_public_egress_utilization_ratio{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.7 }, { "color": "red", "value": 0.85 }] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "采集分组健康度",
+      "description": "CVM 与 Lighthouse 各地域采集分组均为 1 才表示健康。",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "refId": "A", "expr": "min(cloud_network_exporter_group_up{cloud=~\"$cloud\",product=~\"$product\",region=~\"$region\"})" }],
+      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "异常", "color": "red" }, "1": { "text": "正常", "color": "green" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "auto" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "各主机公网带宽趋势",
+      "description": "同一主机的公网入、出带宽，单位 Mbps。",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        { "refId": "A", "expr": "cloud_network_public_receive_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}", "legendFormat": "{{host}} 入" },
+        { "refId": "B", "expr": "cloud_network_public_transmit_mbps{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}", "legendFormat": "{{host}} 出" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Mbps", "decimals": 2, "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 1, "fillOpacity": 8, "showPoints": "auto", "spanNulls": false } }, "overrides": [] },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+      "gridPos": { "h": 10, "w": 15, "x": 0, "y": 5 }
+    },
+    {
+      "id": 6,
+      "type": "bargauge",
+      "title": "各主机出口带宽利用率",
+      "description": "70% 起关注，85% 起高风险；这些阈值仅用于可视化，不会创建告警。",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "refId": "A", "expr": "cloud_network_public_egress_utilization_ratio{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}", "legendFormat": "{{host}}" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "min": 0, "max": 1, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.7 }, { "color": "red", "value": 0.85 }] }, "color": { "mode": "thresholds" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "gridPos": { "h": 10, "w": 9, "x": 15, "y": 5 }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "采集数据时效",
+      "description": "指标时间戳距离当前的秒数。持续高于采集周期通常表示云接口或 exporter 出现问题。",
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [{ "refId": "A", "expr": "time() - max by (product, region) (cloud_network_metric_timestamp_seconds{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})", "legendFormat": "{{product}} / {{region}}" }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 180 }, { "color": "red", "value": 300 }] }, "color": { "mode": "thresholds" }, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 8, "showPoints": "auto", "spanNulls": false } }, "overrides": [] },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 15 }
+    }
+  ]
+}

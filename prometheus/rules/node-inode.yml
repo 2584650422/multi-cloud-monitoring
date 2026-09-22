@@ -1,0 +1,60 @@
+groups:
+  - name: node-inode-alerts
+    rules:
+      # ============================================================
+      # Inode Warning
+      # Inode usage > 80% for 10 minutes.
+      # ============================================================
+      - alert: FilesystemInodesUsageHigh
+        expr: |
+          (
+            1 - (
+              node_filesystem_files_free{
+                job="node-exporter",
+                fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+              }
+              /
+              node_filesystem_files{
+                job="node-exporter",
+                fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+              }
+            )
+          ) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          threshold: "80"
+        annotations:
+          summary: "{{ $labels.host }} inode 使用率过高"
+          metric_name: "inode 使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: 'inode 使用率 > {{ $labels.threshold }}%，持续 10 分钟'
+
+      # ============================================================
+      # Inode Critical
+      # Inode usage > 90% for 5 minutes.
+      # ============================================================
+      - alert: FilesystemInodesUsageHigh
+        expr: |
+          (
+            1 - (
+              node_filesystem_files_free{
+                job="node-exporter",
+                fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+              }
+              /
+              node_filesystem_files{
+                job="node-exporter",
+                fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|ramfs"
+              }
+            )
+          ) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          threshold: "90"
+        annotations:
+          summary: "{{ $labels.host }} inode 使用率严重过高"
+          metric_name: "inode 使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: 'inode 使用率 > {{ $labels.threshold }}%，持续 5 分钟'

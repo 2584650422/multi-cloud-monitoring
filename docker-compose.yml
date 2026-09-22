@@ -1,4 +1,41 @@
 services:
+  tencent-cloud-network-exporter:
+    build:
+      context: ./exporters/tencent-cloud-network-exporter
+      # 此监控机的默认 Docker bridge 网络无法访问外部 DNS；仅构建期复用
+      # 宿主机网络，以便 pip 解析并下载依赖。运行期 network_mode 也为 host。
+      network: host
+    image: local/tencent-cloud-network-exporter:0.1.0
+    container_name: tencent-cloud-network-exporter
+    hostname: tencent-cloud-network-exporter
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      # 本地执行 docker compose config 时允许不存在；生产启动前必须创建，
+      # 否则 exporter 会因缺少凭据主动退出。
+      - path: /data/docker/monitoring/tencent-cloud-network-exporter/.env
+        required: false
+    volumes:
+      - type: bind
+        source: /data/docker/monitoring/tencent-cloud-network-exporter/config.yml
+        # 保留旧的容器内路径，兼容已构建的生产镜像；运行目录和容器名仍为 Tencent 专用。
+        target: /etc/cloud-network-exporter/config.yml
+        read_only: true
+        bind:
+          create_host_path: false
+          selinux: Z
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        read_only: true
+        bind:
+          create_host_path: false
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
   prometheus:
     image: prom/prometheus:v3.13.2
     container_name: prometheus

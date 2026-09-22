@@ -4,8 +4,10 @@
 
 - [grafana/grafana.ini](../grafana/grafana.ini)
 - [datasource provisioning](../grafana/provisioning/datasources/prometheus.yml)
+- [dashboard provider](../grafana/provisioning/dashboards/dashboard-provider.yml)
+- [腾讯云公网带宽大盘](../grafana/provisioning/dashboards/json/tencent-cloud-public-network.json)
 
-本文说明 Grafana Compose、Prometheus datasource provisioning 与验证步骤。具体环境的执行结果和 Dashboard UI 调整记录保存在 [实施记录](records/README.md)。
+本文说明 Grafana Compose、Prometheus datasource 与 dashboard provisioning 及验证步骤。具体环境的执行结果和 Dashboard UI 调整记录保存在 [实施记录](records/README.md)。
 
 ## 为什么 Grafana 也使用 host network
 
@@ -38,7 +40,7 @@ apiVersion: 1
 
 datasources:
   - name: Prometheus
-    uid: prometheus
+    uid: PBFA97CFB590B2093
     type: prometheus
     access: proxy
     url: http://127.0.0.1:9090
@@ -46,10 +48,32 @@ datasources:
     editable: false
 ```
 
-- 固定 `uid` 便于未来 Dashboard 引用。
+- 固定 `uid` 便于 Dashboard 引用；该值必须与现有 Grafana 数据源 UID 保持一致。
 - `access: proxy` 表示查询由 Grafana 后端发起，而不是用户浏览器直连 Prometheus。
 - `isDefault` 设为默认数据源。
 - `editable: false` 防止 UI 临时修改与 Git 声明漂移。
+
+## Dashboard provisioning
+
+Dashboard 由文件 provisioning 管理，provider 会每 30 秒扫描
+`/etc/grafana/provisioning/dashboards/json`：
+
+```yaml
+providers:
+  - name: monitoring
+    folder: Monitoring
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+```
+
+当前包含“腾讯云公网带宽”大盘，展示公网入/出带宽、出口利用率、采集时效和 exporter
+健康状态。大盘 PromQL 使用 `cloud="tencent"` 过滤，因此不会混入未来的阿里云指标。
+
+可以先在 UI 中调试面板；确认后必须导出并更新 JSON 文件。否则下次 provisioning 扫描或
+Grafana 重启时，文件定义会覆盖 UI 中的临时改动。
 
 ## 部署与容器内验证
 
@@ -72,6 +96,9 @@ docker inspect grafana --format '{{json .Mounts}}'
 ```bash
 docker exec grafana \
   ls -lah /etc/grafana/provisioning/datasources
+
+docker exec grafana \
+  find /etc/grafana/provisioning/dashboards -maxdepth 3 -type f -print
 
 docker exec grafana \
   cat /etc/grafana/provisioning/datasources/prometheus.yml
@@ -109,10 +136,18 @@ docker compose restart grafana
 docker compose logs --tail=200 grafana
 ```
 
-随后在 UI 的 Connections / Data sources 中验证名称、UID、默认状态，并在 Explore 执行：
+随后在 UI 的 Connections / Data sources 中验证名称、UID、默认状态；在 Dashboards / Monitoring
+中确认“腾讯云公网带宽”已加载，并在 Explore 执行：
 
 ```promql
 up
+```
+
+腾讯云大盘的最小链路验证：
+
+```promql
+up{job="tencent-cloud-network-exporter"}
+cloud_network_exporter_group_up{cloud="tencent"}
 ```
 
 本项目曾误以为 datasource 未生效，随后在 Grafana UI 中确认它已由 provisioning 正常创建，因此没有删除或修改 provisioning。相关排查命令继续保留，供后续恢复与故障定位使用。

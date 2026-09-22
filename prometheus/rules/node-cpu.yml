@@ -1,0 +1,56 @@
+groups:
+  - name: node-cpu-alerts
+    rules:
+      # ============================================================
+      # CPU Warning
+      # CPU usage > 80% for 10 minutes.
+      # ============================================================
+      - alert: CPUUsageHigh
+        expr: |
+          (
+            1 -
+            avg without (cpu, mode) (
+              rate(
+                node_cpu_seconds_total{
+                  job="node-exporter",
+                  mode="idle"
+                }[5m]
+              )
+            )
+          ) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          threshold: "80"
+        annotations:
+          summary: "{{ $labels.host }} CPU 使用率过高"
+          metric_name: "CPU 使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: 'CPU 使用率 > {{ $labels.threshold }}%，持续 10 分钟'
+
+      # ============================================================
+      # CPU Critical
+      # CPU usage > 90% for 5 minutes.
+      # ============================================================
+      - alert: CPUUsageHigh
+        expr: |
+          (
+            1 -
+            avg without (cpu, mode) (
+              rate(
+                node_cpu_seconds_total{
+                  job="node-exporter",
+                  mode="idle"
+                }[5m]
+              )
+            )
+          ) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          threshold: "90"
+        annotations:
+          summary: "{{ $labels.host }} CPU 使用率严重过高"
+          metric_name: "CPU 使用率"
+          current_value: '{{ printf "%.1f" $value }}%'
+          condition: 'CPU 使用率 > {{ $labels.threshold }}%，持续 5 分钟'

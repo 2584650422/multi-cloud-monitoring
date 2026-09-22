@@ -1,0 +1,29 @@
+# 这里只保存脱敏示例。生产文件 config.yml 不进入 Git。
+listen_address: 127.0.0.1
+listen_port: 9125
+
+# exporter 主动查询腾讯云的周期；5 分钟采集一次可降低 API 用量。
+# 需要分钟级曲线时可改为 60。Prometheus 抓取不会触发腾讯云 API 调用。
+collection_interval_seconds: 300
+# 查询最近 10 分钟，从中选择每个实例最后一个非空数据点，容纳云监控上报延迟。
+lookback_seconds: 600
+
+tencent_cloud:
+  secret_id_env: TENCENTCLOUD_SECRET_ID
+  secret_key_env: TENCENTCLOUD_SECRET_KEY
+  request_timeout_seconds: 15
+
+instances:
+  - instance_id: "ins-example01"
+    product: "cvm"
+    region: "ap-shanghai"
+    host: "TX-CVM-example"
+    env: "prod"
+    public_ip: "203.0.113.11"
+
+  - instance_id: "lhins-example01"
+    product: "lighthouse"
+    region: "ap-beijing"
+    host: "TX-Lighthouse-example"
+    env: "test"
+    public_ip: "203.0.113.12"
