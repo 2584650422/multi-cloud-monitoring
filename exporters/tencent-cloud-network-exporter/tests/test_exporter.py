@@ -32,7 +32,8 @@ class ExporterTests(unittest.TestCase):
         instances = [instance(i, "cvm", "ap-one") for i in range(51)]
         instances.append(instance(52, "lighthouse", "ap-one"))
         instances.append(instance(53, "cvm", "ap-two"))
-        self.assertEqual(exporter.planned_requests_per_cycle(instances), 15)
+        # 15 Cloud Monitor requests plus one Lighthouse traffic-package request.
+        self.assertEqual(exporter.planned_requests_per_cycle(instances), 16)
 
     def test_latest_value_skips_trailing_null(self):
         point = SimpleNamespace(Timestamps=[10, 20, 30], Values=[1.0, 2.5, None])
@@ -43,6 +44,70 @@ class ExporterTests(unittest.TestCase):
             Dimensions=[SimpleNamespace(Name="InstanceId", Value="ins-test")]
         )
         self.assertEqual(exporter.data_point_instance_id(point), "ins-test")
+
+    def test_lighthouse_traffic_totals_sum_multiple_packages_in_bytes(self):
+        packages = [
+            SimpleNamespace(
+                TrafficUsed=10,
+                TrafficPackageTotal=100,
+                TrafficPackageRemaining=90,
+                TrafficOverflow=0,
+            ),
+            SimpleNamespace(
+                TrafficUsed=20,
+                TrafficPackageTotal=200,
+                TrafficPackageRemaining=180,
+                TrafficOverflow=3,
+            ),
+        ]
+        self.assertEqual(
+            exporter.lighthouse_traffic_totals(packages), (30.0, 300.0, 270.0, 3.0)
+        )
+
+    def test_lighthouse_traffic_package_metrics_are_exported(self):
+        instance = exporter.InstanceConfig(
+            instance_id="lhins-package-test",
+            product="lighthouse",
+            region="ap-test",
+            host="package-test-host",
+            env="test",
+            public_ip="203.0.113.4",
+        )
+        collector = object.__new__(exporter.TencentCollector)
+        collector.lighthouse_api_client = lambda _region: SimpleNamespace(
+            DescribeInstancesTrafficPackages=lambda _request: SimpleNamespace(
+                InstanceTrafficPackageSet=[
+                    SimpleNamespace(
+                        InstanceId=instance.instance_id,
+                        TrafficPackageSet=[
+                            SimpleNamespace(
+                                TrafficUsed=50,
+                                TrafficPackageTotal=200,
+                                TrafficPackageRemaining=150,
+                                TrafficOverflow=2,
+                            )
+                        ],
+                    )
+                ]
+            )
+        )
+        self.assertTrue(
+            collector.collect_lighthouse_traffic_packages("ap-test", [instance])
+        )
+        labels = {
+            "cloud": "tencent", "product": "lighthouse", "region": "ap-test",
+            "instance_id": "lhins-package-test", "host": "package-test-host",
+            "env": "test", "public_ip": "203.0.113.4",
+        }
+        self.assertEqual(
+            REGISTRY.get_sample_value("cloud_lighthouse_traffic_used_bytes", labels), 50
+        )
+        self.assertEqual(
+            REGISTRY.get_sample_value("cloud_lighthouse_traffic_total_bytes", labels), 200
+        )
+        self.assertEqual(
+            REGISTRY.get_sample_value("cloud_lighthouse_traffic_usage_percent", labels), 25
+        )
 
     def test_load_config_rejects_unknown_product(self):
         content = """

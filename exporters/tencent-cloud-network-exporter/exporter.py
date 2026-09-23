@@ -22,6 +22,7 @@ from prometheus_client.core import GaugeMetricFamily
 from tencentcloud.common import credential
 from tencentcloud.common.profile.client_profile import ClientProfile
 from tencentcloud.common.profile.http_profile import HttpProfile
+from tencentcloud.lighthouse.v20200324 import lighthouse_client, models as lighthouse_models
 from tencentcloud.monitor.v20180724 import models, monitor_client
 
 
@@ -37,6 +38,7 @@ LABELS = (
 )
 GROUP_LABELS = ("cloud", "product", "region")
 MAX_INSTANCES_PER_REQUEST = 50
+MAX_LIGHTHOUSE_INSTANCES_PER_REQUEST = 100
 METRICS_PER_PRODUCT = {"cvm": 4, "lighthouse": 3}
 
 
@@ -105,7 +107,7 @@ LAST_GROUP_SUCCESS = Gauge(
 )
 API_REQUESTS = Counter(
     "cloud_network_exporter_api_requests_total",
-    "Tencent Cloud GetMonitorData requests made by the exporter.",
+    "Tencent Cloud API requests made by the exporter.",
     (*GROUP_LABELS, "metric", "result"),
 )
 COLLECTION_ERRORS = Counter(
@@ -120,6 +122,31 @@ PLANNED_API_REQUESTS_PER_CYCLE = Gauge(
 COLLECTION_INTERVAL = Gauge(
     "cloud_network_exporter_collection_interval_seconds",
     "Configured interval between collection cycle starts in seconds.",
+)
+LIGHTHOUSE_TRAFFIC_USED = Gauge(
+    "cloud_lighthouse_traffic_used_bytes",
+    "Traffic consumed by the Lighthouse instance's returned traffic packages in bytes.",
+    LABELS,
+)
+LIGHTHOUSE_TRAFFIC_TOTAL = Gauge(
+    "cloud_lighthouse_traffic_total_bytes",
+    "Total allowance of the Lighthouse instance's returned traffic packages in bytes.",
+    LABELS,
+)
+LIGHTHOUSE_TRAFFIC_REMAINING = Gauge(
+    "cloud_lighthouse_traffic_remaining_bytes",
+    "Remaining allowance of the Lighthouse instance's returned traffic packages in bytes.",
+    LABELS,
+)
+LIGHTHOUSE_TRAFFIC_OVERFLOW = Gauge(
+    "cloud_lighthouse_traffic_overflow_bytes",
+    "Traffic exceeding the Lighthouse instance's returned traffic packages in bytes.",
+    LABELS,
+)
+LIGHTHOUSE_TRAFFIC_USAGE_PERCENT = Gauge(
+    "cloud_lighthouse_traffic_usage_percent",
+    "Consumed Lighthouse traffic package allowance as a percentage; values over 100 are possible after overflow.",
+    LABELS,
 )
 
 
@@ -249,10 +276,16 @@ def planned_requests_per_cycle(instances: list[InstanceConfig]) -> int:
     group_sizes: dict[tuple[str, str], int] = defaultdict(int)
     for instance in instances:
         group_sizes[(instance.product, instance.region)] += 1
-    return sum(
+    monitor_requests = sum(
         METRICS_PER_PRODUCT[product] * math.ceil(size / MAX_INSTANCES_PER_REQUEST)
         for (product, _region), size in group_sizes.items()
     )
+    traffic_package_requests = sum(
+        math.ceil(size / MAX_LIGHTHOUSE_INSTANCES_PER_REQUEST)
+        for (product, _region), size in group_sizes.items()
+        if product == "lighthouse"
+    )
+    return monitor_requests + traffic_package_requests
 
 
 def latest_value(data_point: Any) -> tuple[float, int] | None:
@@ -271,11 +304,28 @@ def data_point_instance_id(data_point: Any) -> str | None:
     return None
 
 
+def lighthouse_traffic_totals(packages: Iterable[Any]) -> tuple[float, float, float, float]:
+    """Return byte totals for every traffic package associated with one instance.
+
+    An instance can have more than one returned package. Tencent returns every field
+    in bytes, so summing them retains the API unit and avoids a hidden GB conversion.
+    """
+
+    used = total = remaining = overflow = 0.0
+    for package in packages:
+        used += float(package.TrafficUsed or 0)
+        total += float(package.TrafficPackageTotal or 0)
+        remaining += float(package.TrafficPackageRemaining or 0)
+        overflow += float(package.TrafficOverflow or 0)
+    return used, total, remaining, overflow
+
+
 class TencentCollector:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.credential = credential.Credential(config["secret_id"], config["secret_key"])
         self.clients: dict[str, monitor_client.MonitorClient] = {}
+        self.lighthouse_clients: dict[str, lighthouse_client.LighthouseClient] = {}
 
     def client(self, region: str) -> monitor_client.MonitorClient:
         if region not in self.clients:
@@ -287,6 +337,17 @@ class TencentCollector:
                 self.credential, region, client_profile
             )
         return self.clients[region]
+
+    def lighthouse_api_client(self, region: str) -> lighthouse_client.LighthouseClient:
+        if region not in self.lighthouse_clients:
+            http_profile = HttpProfile()
+            http_profile.endpoint = "lighthouse.tencentcloudapi.com"
+            http_profile.reqTimeout = self.config["request_timeout_seconds"]
+            client_profile = ClientProfile(httpProfile=http_profile)
+            self.lighthouse_clients[region] = lighthouse_client.LighthouseClient(
+                self.credential, region, client_profile
+            )
+        return self.lighthouse_clients[region]
 
     def query(
         self,
@@ -327,6 +388,61 @@ class TencentCollector:
             if instance_id and point:
                 result[instance_id] = point
         return result
+
+    def collect_lighthouse_traffic_packages(
+        self, region: str, instances: list[InstanceConfig]
+    ) -> bool:
+        """Collect current Lighthouse package allowances for one region.
+
+        These values describe the current package state rather than a Cloud Monitor
+        historical data point, therefore they intentionally use ordinary Gauges.
+        """
+
+        group_labels = ("tencent", "lighthouse", region)
+        values: dict[str, tuple[float, float, float, float]] = {}
+        try:
+            for batch in chunks(instances, MAX_LIGHTHOUSE_INSTANCES_PER_REQUEST):
+                request = lighthouse_models.DescribeInstancesTrafficPackagesRequest()
+                request.InstanceIds = [instance.instance_id for instance in batch]
+                request.Limit = len(batch)
+                response = self.lighthouse_api_client(region).DescribeInstancesTrafficPackages(
+                    request
+                )
+                API_REQUESTS.labels(
+                    *group_labels, "DescribeInstancesTrafficPackages", "success"
+                ).inc()
+                for instance_package in response.InstanceTrafficPackageSet or []:
+                    values[instance_package.InstanceId] = lighthouse_traffic_totals(
+                        instance_package.TrafficPackageSet or []
+                    )
+        except Exception:
+            API_REQUESTS.labels(
+                *group_labels, "DescribeInstancesTrafficPackages", "error"
+            ).inc()
+            LOG.exception(
+                "Lighthouse traffic package collection failed for region=%s", region
+            )
+            return False
+
+        successful = True
+        for instance in instances:
+            totals = values.get(instance.instance_id)
+            if totals is None:
+                successful = False
+                LOG.warning(
+                    "No Lighthouse traffic package returned for region=%s instance=%s",
+                    region,
+                    instance.instance_id,
+                )
+                continue
+            used, total, remaining, overflow = totals
+            LIGHTHOUSE_TRAFFIC_USED.labels(*instance.labels()).set(used)
+            LIGHTHOUSE_TRAFFIC_TOTAL.labels(*instance.labels()).set(total)
+            LIGHTHOUSE_TRAFFIC_REMAINING.labels(*instance.labels()).set(remaining)
+            LIGHTHOUSE_TRAFFIC_OVERFLOW.labels(*instance.labels()).set(overflow)
+            usage_percent = used / total * 100 if total > 0 else 0.0
+            LIGHTHOUSE_TRAFFIC_USAGE_PERCENT.labels(*instance.labels()).set(usage_percent)
+        return successful
 
     def collect_group(
         self, product: str, region: str, instances: list[InstanceConfig]
@@ -375,6 +491,9 @@ class TencentCollector:
                     metric_name,
                 )
 
+        if product == "lighthouse":
+            successful = self.collect_lighthouse_traffic_packages(region, instances) and successful
+
         GROUP_UP.labels(*group_labels).set(1 if successful else 0)
         if successful:
             LAST_GROUP_SUCCESS.labels(*group_labels).set_to_current_time()
@@ -415,7 +534,7 @@ def main() -> None:
         len(config["instances"]),
     )
     LOG.info(
-        "Collection interval=%ds; planned GetMonitorData requests=%d/cycle, "
+        "Collection interval=%ds; planned Tencent Cloud API requests=%d/cycle, "
         "approximately %.1f/hour and %.0f/30-day month",
         interval,
         planned_requests,

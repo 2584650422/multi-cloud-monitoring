@@ -3,7 +3,7 @@
 本阶段只接入腾讯云，不包含阿里云。数据链路如下：
 
 ```text
-Tencent Cloud GetMonitorData
+Tencent Cloud GetMonitorData + Lighthouse DescribeInstancesTrafficPackages
         -> tencent-cloud-network-exporter 默认每 300 秒主动批量查询并缓存
         -> /metrics (127.0.0.1:9125)
         -> Prometheus 每 30 秒抓取并写入本地 TSDB
@@ -19,12 +19,14 @@ Prometheus 不依赖 exporter 成功启动；即使腾讯云 API 或密钥暂时
 `GetMonitorData` 每次只能查询一个指标，一次最多批量查询 50 台实例。每轮请求数为：
 
 ```text
-3 个指标 × Σ(每个 product + region 分组的实例数向上取整除以 50)
+GetMonitorData 指标数 × Σ(每个 product + region 分组的实例数向上取整除以 50)
 ```
 
-例如同一地域的 CVM 和 Lighthouse 各少于 50 台：每轮 6 次请求。原先每 60 秒一轮，
-即 360 次/小时、30 天约 259,200 次；约 6,000 次对应运行约 16.7 小时。现在脱敏示例
-使用每 300 秒一轮，预期 72 次/小时、30 天约 51,840 次。跨地域或某组超过 50 台时，
+其中 CVM 为 4 个指标（含 `AccOuttraffic`），Lighthouse 为 3 个带宽指标。每个 Lighthouse
+地域分组还会额外调用一次 `DescribeInstancesTrafficPackages`，该接口单次最多 100 台实例。
+例如同一地域的 CVM 和 Lighthouse 各少于 50 台：每轮 8 次请求。若每 60 秒一轮，
+即 480 次/小时、30 天约 345,600 次；约 6,000 次对应运行约 12.5 小时。现在脱敏示例
+使用每 300 秒一轮，预期 96 次/小时、30 天约 69,120 次。跨地域或某组超过上限时，
 按上式增加。腾讯云控制台的“资源消耗”按主账号统计；同一主账号其他程序调用
 `GetMonitorData` 也可能计入，不能仅凭控制台总量推断本 exporter 用量。
 
@@ -51,6 +53,7 @@ exporter 统一暴露：
 cloud_network_public_receive_mbps
 cloud_network_public_transmit_mbps
 cloud_network_public_egress_utilization_ratio
+cloud_network_public_transmit_megabytes
 cloud_network_metric_timestamp_seconds
 cloud_network_exporter_group_up
 cloud_network_exporter_last_success_timestamp_seconds
@@ -65,6 +68,30 @@ cloud_network_exporter_last_success_timestamp_seconds
 
 历史上已经写入 Prometheus 的 Lighthouse 带宽样本仍是旧版的 8 倍；重新构建并启动
 exporter 后的新样本才会恢复正确值。
+
+### Lighthouse 套餐流量
+
+Lighthouse 套餐流量通过 `DescribeInstancesTrafficPackages` 获取。它不是带宽采样，也不能和
+CVM 的 `AccOuttraffic` 互换：前者表示当前套餐余额，后者表示一个 Cloud Monitor 周期内的
+公网出流量。exporter 对 API 返回的每个实例所有流量包求和，并原样保留字节单位：
+
+```text
+cloud_lighthouse_traffic_used_bytes
+cloud_lighthouse_traffic_total_bytes
+cloud_lighthouse_traffic_remaining_bytes
+cloud_lighthouse_traffic_overflow_bytes
+cloud_lighthouse_traffic_usage_percent
+```
+
+`cloud_lighthouse_traffic_usage_percent` 计算为 `used / total × 100`。总量为 0 时导出 0，
+避免除零；发生超额后该指标允许大于 100，超出部分同时由 `overflow_bytes` 单独展示。这些
+指标是采集时的套餐快照，不带腾讯监控时间戳；图表应使用普通瞬时值或当前时间范围内的最后值。
+
+Grafana 中为 Lighthouse 建独立的“套餐流量”行，查询固定加 `product="lighthouse"`。例如：
+
+```promql
+cloud_lighthouse_traffic_usage_percent{cloud="tencent", product="lighthouse", host=~"$host"}
+```
 
 ## 监控时间与尖峰持续时间
 
@@ -103,7 +130,7 @@ public_ip="..."
 
 ## 最小权限
 
-已知实例 ID 时，采集上述指标只需要：
+已知实例 ID 时，采集带宽与 CVM 出流量只需要：
 
 ```json
 {
@@ -118,7 +145,14 @@ public_ip="..."
 }
 ```
 
-本实现不调用 `DescribeInstances`，不需要 Lighthouse/CVM 资源枚举权限。
+采集 Lighthouse 套餐流量还需要新增一项最小权限：
+
+```text
+lighthouse:DescribeInstancesTrafficPackages
+```
+
+本实现不调用 `DescribeInstances`，不需要 Lighthouse/CVM 资源枚举权限。腾讯云接口每次最多
+接收 100 个实例 ID，返回的已用、总量、剩余和超额字段均为字节。
 
 ## 生产文件
 
@@ -199,7 +233,7 @@ docker compose logs --tail=100 tencent-cloud-network-exporter
 curl -fsS http://127.0.0.1:9125/metrics | grep '^cloud_network_'
 ```
 
-确认三项业务指标、`cloud_network_exporter_group_up 1` 和合理的数据时间戳后，再检查并加载 Prometheus：
+确认业务指标、`cloud_network_exporter_group_up 1` 和合理的数据时间戳后，再检查并加载 Prometheus：
 
 ```bash
 docker run --rm \
@@ -225,6 +259,7 @@ cloud_network_exporter_group_up{cloud="tencent"}
 cloud_network_public_receive_mbps{cloud="tencent"}
 cloud_network_public_transmit_mbps{cloud="tencent"}
 cloud_network_public_egress_utilization_ratio{cloud="tencent"}
+cloud_lighthouse_traffic_usage_percent{cloud="tencent",product="lighthouse"}
 ```
 
 `up=1` 只证明 Prometheus 能抓到 exporter。腾讯云 API 采集是否成功必须同时看
