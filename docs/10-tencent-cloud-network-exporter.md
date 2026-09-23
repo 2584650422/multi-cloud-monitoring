@@ -20,13 +20,15 @@ Prometheus 不依赖 exporter 成功启动；即使腾讯云 API 或密钥暂时
 
 ```text
 GetMonitorData 指标数 × Σ(每个 product + region 分组的实例数向上取整除以 50)
++ Σ(每个 Lighthouse region 的实例数向上取整除以 100)
++ 1 次账号级 DescribeMonitorResourceInfo
 ```
 
 其中 CVM 为 4 个指标（含 `AccOuttraffic`），Lighthouse 为 3 个带宽指标。每个 Lighthouse
-地域分组还会额外调用一次 `DescribeInstancesTrafficPackages`，该接口单次最多 100 台实例。
-例如同一地域的 CVM 和 Lighthouse 各少于 50 台：每轮 8 次请求。若每 60 秒一轮，
-即 480 次/小时、30 天约 345,600 次；约 6,000 次对应运行约 12.5 小时。现在脱敏示例
-使用每 300 秒一轮，预期 96 次/小时、30 天约 69,120 次。跨地域或某组超过上限时，
+地域分组会调用 `DescribeInstancesTrafficPackages`，该接口单次最多 100 台实例。例如同一地域的 CVM 和 Lighthouse 各少于
+50 台：每轮 9 次请求。若每 60 秒一轮，即 540 次/小时、30 天约 388,800 次；约 6,000 次
+对应运行约 11.1 小时。现在脱敏示例使用每 300 秒一轮，预期 108 次/小时、30 天约
+77,760 次。跨地域或某组超过上限时，
 按上式增加。腾讯云控制台的“资源消耗”按主账号统计；同一主账号其他程序调用
 `GetMonitorData` 也可能计入，不能仅凭控制台总量推断本 exporter 用量。
 
@@ -34,6 +36,13 @@ GetMonitorData 指标数 × Σ(每个 product + region 分组的实例数向上�
 `cloud_network_exporter_collection_interval_seconds`，核对预期每轮请求数和周期；
 `sum(increase(cloud_network_exporter_api_requests_total{cloud="tencent"}[1h]))` 可查看
 exporter 过去一小时的实际请求数。该计数器从容器最近一次启动开始累计，重启后重置。
+账号级资源消耗面板展示腾讯接口返回的已用量，以及配置的月额度、剩余额度和使用率；
+`APIUsageNumber` 本身不返回额度，月额度由 `tencent_cloud.monitor_api_monthly_quota`
+配置（默认 1,000,000）。同面板的 exporter 近 24 小时 `GetMonitorData` 计数仅统计带宽和
+CVM 出流量查询，不含 Lighthouse 套餐查询，也不等同于账号内所有程序的用量。
+`DescribeMonitorResourceInfo` 每采集周期增加一次账号级查询；它不属于 `GetMonitorData`。
+面板中的接口状态为 `1` 表示最近一次查询成功，`0` 表示失败；用量数值在接口失败时会保留上次成功值，
+请结合状态判断数据是否仍在刷新。
 
 生产 `config.yml` 若仍为 `collection_interval_seconds: 60`，仅更新仓库示例不会改变
 运行周期。要降低用量，编辑生产配置为 `300`，并将 `lookback_seconds` 设为 `600`，
@@ -58,6 +67,11 @@ cloud_network_metric_timestamp_seconds
 cloud_network_exporter_group_up
 cloud_network_exporter_last_success_timestamp_seconds
 ```
+
+账号级资源消耗另有 `cloud_tencent_monitor_api_usage_number`、
+`cloud_tencent_monitor_api_monthly_quota`、`cloud_tencent_monitor_api_remaining_number`、
+`cloud_tencent_monitor_api_usage_percent` 和 `cloud_tencent_monitor_api_up`。这些序列只带
+`cloud="tencent"` 标签，独立于主机、地域和产品筛选。
 
 腾讯云 CVM 的 `WanIntraffic` / `WanOuttraffic` 本身是 Mbps。腾讯云的
 [Lighthouse 监控指标文档](https://cloud.tencent.com/document/product/248/60127)将
@@ -138,7 +152,7 @@ public_ip="..."
   "statement": [
     {
       "effect": "allow",
-      "action": ["monitor:GetMonitorData"],
+      "action": ["monitor:GetMonitorData", "monitor:DescribeMonitorResourceInfo"],
       "resource": ["*"]
     }
   ]

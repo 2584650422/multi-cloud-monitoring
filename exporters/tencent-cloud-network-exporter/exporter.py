@@ -117,11 +117,41 @@ COLLECTION_ERRORS = Counter(
 )
 PLANNED_API_REQUESTS_PER_CYCLE = Gauge(
     "cloud_network_exporter_planned_api_requests_per_cycle",
-    "Expected GetMonitorData requests in each collection cycle, before errors.",
+    "Expected Tencent Cloud API requests in each collection cycle, before errors.",
 )
 COLLECTION_INTERVAL = Gauge(
     "cloud_network_exporter_collection_interval_seconds",
     "Configured interval between collection cycle starts in seconds.",
+)
+TENCENT_MONITOR_API_USAGE = Gauge(
+    "cloud_tencent_monitor_api_usage_number",
+    "Tencent Cloud Monitor API usage number returned by DescribeMonitorResourceInfo.",
+    ("cloud",),
+)
+TENCENT_MONITOR_API_QUOTA = Gauge(
+    "cloud_tencent_monitor_api_monthly_quota",
+    "Configured monthly Tencent Cloud Monitor API request quota.",
+    ("cloud",),
+)
+TENCENT_MONITOR_API_REMAINING = Gauge(
+    "cloud_tencent_monitor_api_remaining_number",
+    "Estimated remaining Tencent Cloud Monitor API requests in the configured quota.",
+    ("cloud",),
+)
+TENCENT_MONITOR_API_USAGE_PERCENT = Gauge(
+    "cloud_tencent_monitor_api_usage_percent",
+    "Tencent Cloud Monitor API usage as a percentage of the configured monthly quota.",
+    ("cloud",),
+)
+TENCENT_MONITOR_API_LAST_SUCCESS = Gauge(
+    "cloud_tencent_monitor_api_last_success_timestamp_seconds",
+    "Unix timestamp of the last successful Tencent Cloud Monitor API usage query.",
+    ("cloud",),
+)
+TENCENT_MONITOR_API_UP = Gauge(
+    "cloud_tencent_monitor_api_up",
+    "Whether the last Tencent Cloud Monitor API usage query succeeded.",
+    ("cloud",),
 )
 LIGHTHOUSE_TRAFFIC_USED = Gauge(
     "cloud_lighthouse_traffic_used_bytes",
@@ -255,17 +285,21 @@ def load_config(path: Path) -> dict[str, Any]:
             f"Tencent Cloud credentials must be set in {secret_id_env} and {secret_key_env}"
         )
 
+    monitor_api_monthly_quota = int(tencent.get("monitor_api_monthly_quota", 1_000_000))
+    if monitor_api_monthly_quota <= 0:
+        raise ValueError("tencent_cloud.monitor_api_monthly_quota must be positive")
+
     return {
         "listen_address": str(config.get("listen_address", "127.0.0.1")),
         "listen_port": int(config.get("listen_port", 9125)),
         "collection_interval_seconds": interval,
         "lookback_seconds": lookback,
         "request_timeout_seconds": int(tencent.get("request_timeout_seconds", 15)),
+        "monitor_api_monthly_quota": monitor_api_monthly_quota,
         "secret_id": secret_id,
         "secret_key": secret_key,
         "instances": instances,
     }
-
 
 def chunks(items: list[InstanceConfig], size: int) -> Iterable[list[InstanceConfig]]:
     for offset in range(0, len(items), size):
@@ -285,7 +319,7 @@ def planned_requests_per_cycle(instances: list[InstanceConfig]) -> int:
         for (product, _region), size in group_sizes.items()
         if product == "lighthouse"
     )
-    return monitor_requests + traffic_package_requests
+    return monitor_requests + traffic_package_requests + 1
 
 
 def latest_value(data_point: Any) -> tuple[float, int] | None:
@@ -326,6 +360,7 @@ class TencentCollector:
         self.credential = credential.Credential(config["secret_id"], config["secret_key"])
         self.clients: dict[str, monitor_client.MonitorClient] = {}
         self.lighthouse_clients: dict[str, lighthouse_client.LighthouseClient] = {}
+        self.account_monitor_client: monitor_client.MonitorClient | None = None
 
     def client(self, region: str) -> monitor_client.MonitorClient:
         if region not in self.clients:
@@ -348,6 +383,41 @@ class TencentCollector:
                 self.credential, region, client_profile
             )
         return self.lighthouse_clients[region]
+
+    def collect_monitor_api_usage(self) -> bool:
+        """Refresh account-level Monitor API usage and quota metrics."""
+        labels = ("tencent",)
+        request_labels = ("tencent", "account", "global")
+        try:
+            if self.account_monitor_client is None:
+                http_profile = HttpProfile()
+                http_profile.endpoint = "monitor.tencentcloudapi.com"
+                http_profile.reqTimeout = self.config["request_timeout_seconds"]
+                client_profile = ClientProfile(httpProfile=http_profile)
+                self.account_monitor_client = monitor_client.MonitorClient(
+                    self.credential, "", client_profile
+                )
+            request = models.DescribeMonitorResourceInfoRequest()
+            response = self.account_monitor_client.DescribeMonitorResourceInfo(request)
+            used = max(0, int(response.APIUsageNumber or 0))
+            quota = self.config["monitor_api_monthly_quota"]
+            TENCENT_MONITOR_API_USAGE.labels(*labels).set(used)
+            TENCENT_MONITOR_API_QUOTA.labels(*labels).set(quota)
+            TENCENT_MONITOR_API_REMAINING.labels(*labels).set(max(quota - used, 0))
+            TENCENT_MONITOR_API_USAGE_PERCENT.labels(*labels).set(used / quota * 100)
+            TENCENT_MONITOR_API_LAST_SUCCESS.labels(*labels).set_to_current_time()
+            TENCENT_MONITOR_API_UP.labels(*labels).set(1)
+            API_REQUESTS.labels(
+                *request_labels, "DescribeMonitorResourceInfo", "success"
+            ).inc()
+            return True
+        except Exception:
+            TENCENT_MONITOR_API_UP.labels(*labels).set(0)
+            API_REQUESTS.labels(
+                *request_labels, "DescribeMonitorResourceInfo", "error"
+            ).inc()
+            LOG.exception("Failed to collect Tencent Cloud Monitor API usage")
+            return False
 
     def query(
         self,
@@ -506,6 +576,7 @@ class TencentCollector:
             groups[(instance.product, instance.region)].append(instance)
         for (product, region), instances in groups.items():
             self.collect_group(product, region, instances)
+        self.collect_monitor_api_usage()
 
 
 def main() -> None:
