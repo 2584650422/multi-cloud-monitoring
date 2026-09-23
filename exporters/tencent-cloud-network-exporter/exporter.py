@@ -37,7 +37,7 @@ LABELS = (
 )
 GROUP_LABELS = ("cloud", "product", "region")
 MAX_INSTANCES_PER_REQUEST = 50
-METRICS_PER_GROUP = 3
+METRICS_PER_PRODUCT = {"cvm": 4, "lighthouse": 3}
 
 
 BUSINESS_METRIC_LABELS = (*LABELS, "source_timestamped")
@@ -52,6 +52,9 @@ BUSINESS_METRICS = {
     ),
     "cloud_network_public_egress_utilization_ratio": (
         "Public network egress bandwidth utilization as a ratio from 0 to 1.",
+    ),
+    "cloud_network_public_transmit_megabytes": (
+        "Public network transmit traffic in megabytes during the Tencent Cloud source period.",
     ),
 }
 
@@ -147,6 +150,7 @@ class ProductSpec:
     receive_metric: str
     transmit_metric: str
     utilization_metric: str
+    transmit_traffic_metric: str | None
     bandwidth_multiplier: float
 
 
@@ -156,6 +160,7 @@ PRODUCTS = {
         receive_metric="WanIntraffic",
         transmit_metric="WanOuttraffic",
         utilization_metric="Outratio",
+        transmit_traffic_metric="AccOuttraffic",
         bandwidth_multiplier=1.0,
     ),
     "lighthouse": ProductSpec(
@@ -163,6 +168,7 @@ PRODUCTS = {
         receive_metric="LighthouseIntraffic",
         transmit_metric="LighthouseOuttraffic",
         utilization_metric="LighthouseOutratio",
+        transmit_traffic_metric=None,
         # GetMonitorData 返回 9.804，对应控制台数据点为 9.804 Mbps，时间为2026-09-22 13:54:00 +08:00。
         # 发布的 MB/s 单位与此 API 观测值不一致；乘以 8 产生了错误的仪表板数据点 78.432 Mbps。
         # bandwidth_multiplier=8.0,
@@ -243,9 +249,9 @@ def planned_requests_per_cycle(instances: list[InstanceConfig]) -> int:
     group_sizes: dict[tuple[str, str], int] = defaultdict(int)
     for instance in instances:
         group_sizes[(instance.product, instance.region)] += 1
-    return METRICS_PER_GROUP * sum(
-        math.ceil(size / MAX_INSTANCES_PER_REQUEST)
-        for size in group_sizes.values()
+    return sum(
+        METRICS_PER_PRODUCT[product] * math.ceil(size / MAX_INSTANCES_PER_REQUEST)
+        for (product, _region), size in group_sizes.items()
     )
 
 
@@ -326,11 +332,15 @@ class TencentCollector:
         self, product: str, region: str, instances: list[InstanceConfig]
     ) -> None:
         spec = PRODUCTS[product]
-        metric_jobs = (
+        metric_jobs = [
             (spec.receive_metric, "cloud_network_public_receive_mbps", spec.bandwidth_multiplier, "receive"),
             (spec.transmit_metric, "cloud_network_public_transmit_mbps", spec.bandwidth_multiplier, "transmit"),
             (spec.utilization_metric, "cloud_network_public_egress_utilization_ratio", 0.01, "egress_utilization"),
-        )
+        ]
+        if spec.transmit_traffic_metric:
+            metric_jobs.append(
+                (spec.transmit_traffic_metric, "cloud_network_public_transmit_megabytes", 1.0, "transmit_traffic")
+            )
         group_labels = ("tencent", product, region)
         successful = True
 

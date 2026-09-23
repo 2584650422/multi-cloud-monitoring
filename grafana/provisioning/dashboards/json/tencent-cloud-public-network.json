@@ -1,73 +1,125 @@
 {
   "uid": "tencent-cloud-public-network",
   "title": "腾讯云公网带宽",
-  "tags": ["tencent", "network", "production"],
+  "tags": [
+    "tencent",
+    "network",
+    "production"
+  ],
   "timezone": "browser",
   "schemaVersion": 42,
   "version": 1,
   "refresh": "1m",
-  "time": { "from": "now-6h", "to": "now" },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "cloud",
         "label": "云厂商",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(cloud_network_public_transmit_mbps, cloud)",
-        "query": { "query": "label_values(cloud_network_public_transmit_mbps, cloud)", "refId": "Prometheus-cloud-Variable-Query" },
+        "query": {
+          "query": "label_values(cloud_network_public_transmit_mbps, cloud)",
+          "refId": "Prometheus-cloud-Variable-Query"
+        },
         "includeAll": true,
         "allValue": ".+",
         "multi": true,
-        "current": { "text": "tencent", "value": "tencent" }
+        "current": {
+          "text": "tencent",
+          "value": "tencent"
+        }
       },
       {
         "name": "env",
         "label": "环境",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\"}, env)",
-        "query": { "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\"}, env)", "refId": "Prometheus-env-Variable-Query" },
+        "query": {
+          "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\"}, env)",
+          "refId": "Prometheus-env-Variable-Query"
+        },
         "includeAll": true,
         "allValue": ".+",
         "multi": true,
-        "current": { "text": "All", "value": "$__all" }
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
       },
       {
         "name": "product",
         "label": "产品",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\"}, product)",
-        "query": { "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\"}, product)", "refId": "Prometheus-product-Variable-Query" },
+        "query": {
+          "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\"}, product)",
+          "refId": "Prometheus-product-Variable-Query"
+        },
         "includeAll": true,
         "allValue": ".+",
         "multi": true,
-        "current": { "text": "All", "value": "$__all" }
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
       },
       {
         "name": "region",
         "label": "地域",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\"}, region)",
-        "query": { "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\"}, region)", "refId": "Prometheus-region-Variable-Query" },
+        "query": {
+          "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\"}, region)",
+          "refId": "Prometheus-region-Variable-Query"
+        },
         "includeAll": true,
         "allValue": ".+",
         "multi": true,
-        "current": { "text": "All", "value": "$__all" }
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
       },
       {
         "name": "host",
         "label": "主机",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
         "definition": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\"}, host)",
-        "query": { "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\"}, host)", "refId": "Prometheus-host-Variable-Query" },
+        "query": {
+          "query": "label_values(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\"}, host)",
+          "refId": "Prometheus-host-Variable-Query"
+        },
         "includeAll": true,
         "allValue": ".+",
         "multi": true,
-        "current": { "text": "All", "value": "$__all" }
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
       }
     ]
   },
@@ -76,79 +128,631 @@
       "id": 1,
       "type": "stat",
       "title": "当前公网入带宽（汇总）",
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "refId": "A", "expr": "sum(cloud_network_public_receive_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})" }],
-      "fieldConfig": { "defaults": { "unit": "Mbps", "decimals": 2, "color": { "mode": "palette-classic" } }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto" },
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 }
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(cloud_network_public_receive_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "id": 2,
       "type": "stat",
       "title": "当前公网出带宽（汇总）",
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "refId": "A", "expr": "sum(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})" }],
-      "fieldConfig": { "defaults": { "unit": "Mbps", "decimals": 2, "color": { "mode": "palette-classic" } }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto" },
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 }
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      }
     },
     {
       "id": 3,
       "type": "stat",
       "title": "最高出口带宽利用率",
       "description": "腾讯云 Outratio / LighthouseOutratio，非自行推算。",
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "refId": "A", "expr": "max(cloud_network_public_egress_utilization_ratio{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})" }],
-      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.7 }, { "color": "red", "value": 0.85 }] }, "color": { "mode": "thresholds" } }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto" },
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 }
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(cloud_network_public_egress_utilization_ratio{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      }
     },
     {
       "id": 4,
       "type": "stat",
       "title": "采集分组健康度",
       "description": "CVM 与 Lighthouse 各地域采集分组均为 1 才表示健康。",
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "refId": "A", "expr": "min(cloud_network_exporter_group_up{cloud=~\"$cloud\",product=~\"$product\",region=~\"$region\"})" }],
-      "fieldConfig": { "defaults": { "mappings": [{ "type": "value", "options": { "0": { "text": "异常", "color": "red" }, "1": { "text": "正常", "color": "green" } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "color": { "mode": "thresholds" } }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none", "justifyMode": "auto" },
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 }
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min(cloud_network_exporter_group_up{cloud=~\"$cloud\",product=~\"$product\",region=~\"$region\"})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "异常",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "正常",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      }
     },
     {
       "id": 5,
       "type": "timeseries",
       "title": "各主机公网带宽趋势",
       "description": "同一主机的公网入、出带宽，单位 Mbps。曲线按腾讯云 60 秒源时间戳展示；腾讯云原始数据可能延迟 1～2 分钟。",
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
-        { "refId": "A", "expr": "cloud_network_public_receive_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}", "legendFormat": "{{host}} 入" },
-        { "refId": "B", "expr": "cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}", "legendFormat": "{{host}} 出" }
+        {
+          "refId": "A",
+          "expr": "cloud_network_public_receive_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}",
+          "legendFormat": "{{host}} 入"
+        },
+        {
+          "refId": "B",
+          "expr": "cloud_network_public_transmit_mbps{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}",
+          "legendFormat": "{{host}} 出"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "Mbps", "decimals": 2, "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 8, "showPoints": "auto", "spanNulls": false } }, "overrides": [] },
-      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
-      "gridPos": { "h": 10, "w": 15, "x": 0, "y": 5 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 15,
+        "x": 0,
+        "y": 5
+      }
     },
     {
       "id": 6,
       "type": "bargauge",
       "title": "各主机出口带宽利用率",
-      "description": "70% 起关注，85% 起高风险；这些阈值仅用于可视化，不会创建告警。",
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "refId": "A", "expr": "cloud_network_public_egress_utilization_ratio{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"}", "legendFormat": "{{host}}" }],
-      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "min": 0, "max": 1, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.7 }, { "color": "red", "value": 0.85 }] }, "color": { "mode": "thresholds" } }, "overrides": [] },
-      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
-      "gridPos": { "h": 10, "w": 9, "x": 15, "y": 5 }
+      "description": "按当前出口带宽利用率从高到低排序；同时适用于单主机和多主机筛选。70% 起关注，85% 起高风险。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(cloud_network_public_egress_utilization_ratio{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})",
+          "legendFormat": "{{host}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 9,
+        "x": 15,
+        "y": 5
+      }
     },
     {
       "id": 7,
       "type": "timeseries",
       "title": "采集数据时效",
       "description": "指标时间戳距离当前的秒数。持续高于采集周期通常表示云接口或 exporter 出现问题。",
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "refId": "A", "expr": "time() - max by (product, region) (cloud_network_metric_timestamp_seconds{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})", "legendFormat": "{{product}} / {{region}}" }],
-      "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 180 }, { "color": "red", "value": 300 }] }, "color": { "mode": "thresholds" }, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 8, "showPoints": "auto", "spanNulls": false } }, "overrides": [] },
-      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 15 }
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - max by (product, region) (cloud_network_metric_timestamp_seconds{cloud=~\"$cloud\",env=~\"$env\",product=~\"$product\",region=~\"$region\",host=~\"$host\"})",
+          "legendFormat": "{{product}} / {{region}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 180
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      }
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "CVM 公网出流量",
+      "description": "CVM 专属指标；Lighthouse 套餐累计流量将在独立区域展示。",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "查询时间范围内公网出流量",
+      "description": "CVM 专属。腾讯云 AccOuttraffic，表示每个 60 秒源统计周期内的公网出流量。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(sum_over_time(cloud_network_public_transmit_megabytes{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=\"cvm\",region=~\"$region\",host=~\"$host\"}[$__range])) * 1000000"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 24
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "最近 1 小时公网出流量",
+      "description": "CVM 专属。腾讯云 AccOuttraffic，表示每个 60 秒源统计周期内的公网出流量。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(sum_over_time(cloud_network_public_transmit_megabytes{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=\"cvm\",region=~\"$region\",host=~\"$host\"}[1h])) * 1000000"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 24
+      },
+      "timeFrom": "1h"
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "最近 24 小时公网出流量",
+      "description": "CVM 专属。腾讯云 AccOuttraffic，表示每个 60 秒源统计周期内的公网出流量。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(sum_over_time(cloud_network_public_transmit_megabytes{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=\"cvm\",region=~\"$region\",host=~\"$host\"}[24h])) * 1000000"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 24
+      },
+      "timeFrom": "24h"
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "CVM 公网出流量趋势",
+      "description": "CVM 专属。每个点表示腾讯云对应 60 秒统计周期内的公网出流量。",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "cloud_network_public_transmit_megabytes{source_timestamped=\"true\",cloud=~\"$cloud\",env=~\"$env\",product=\"cvm\",region=~\"$region\",host=~\"$host\"} * 1000000",
+          "legendFormat": "{{host}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 1,
+            "fillOpacity": 20,
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "sum"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      }
     }
   ]
 }

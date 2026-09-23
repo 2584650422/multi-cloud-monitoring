@@ -32,7 +32,7 @@ class ExporterTests(unittest.TestCase):
         instances = [instance(i, "cvm", "ap-one") for i in range(51)]
         instances.append(instance(52, "lighthouse", "ap-one"))
         instances.append(instance(53, "cvm", "ap-two"))
-        self.assertEqual(exporter.planned_requests_per_cycle(instances), 12)
+        self.assertEqual(exporter.planned_requests_per_cycle(instances), 15)
 
     def test_latest_value_skips_trailing_null(self):
         point = SimpleNamespace(Timestamps=[10, 20, 30], Values=[1.0, 2.5, None])
@@ -137,6 +137,31 @@ instances:
                 "cloud_network_public_egress_utilization_ratio", labels
             ),
             0.375,
+        )
+
+    def test_cvm_transmit_traffic_is_exported_in_megabytes(self):
+        instance = exporter.InstanceConfig(
+            instance_id="ins-unit-test", product="cvm", region="ap-test",
+            host="unit-test-host", env="test", public_ip="203.0.113.3",
+        )
+        values = {
+            "WanIntraffic": 1.25, "WanOuttraffic": 2.5,
+            "Outratio": 37.5, "AccOuttraffic": 42.75,
+        }
+        collector = object.__new__(exporter.TencentCollector)
+        collector.config = {"instances": [instance]}
+        collector.query = lambda _product, _region, _instances, metric: {
+            instance.instance_id: (values[metric], 100)
+        }
+        collector.collect_group("cvm", "ap-test", [instance])
+        labels = {
+            "cloud": "tencent", "product": "cvm", "region": "ap-test",
+            "instance_id": "ins-unit-test", "host": "unit-test-host", "env": "test",
+            "public_ip": "203.0.113.3", "source_timestamped": "true",
+        }
+        self.assertEqual(
+            REGISTRY.get_sample_value("cloud_network_public_transmit_megabytes", labels),
+            42.75,
         )
 
     def test_timestamped_metrics_expose_tencent_source_time(self):
