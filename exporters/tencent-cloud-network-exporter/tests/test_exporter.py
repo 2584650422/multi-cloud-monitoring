@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from prometheus_client import REGISTRY
+from prometheus_client import REGISTRY, generate_latest
 
 
 MODULE_PATH = Path(__file__).parents[1] / "exporter.py"
@@ -122,6 +122,7 @@ instances:
             "host": "unit-test-host",
             "env": "test",
             "public_ip": "203.0.113.2",
+            "source_timestamped": "true",
         }
         self.assertEqual(
             REGISTRY.get_sample_value("cloud_network_public_receive_mbps", labels),
@@ -136,6 +137,17 @@ instances:
                 "cloud_network_public_egress_utilization_ratio", labels
             ),
             0.375,
+        )
+
+    def test_timestamped_metrics_expose_tencent_source_time(self):
+        labels = ("tencent", "cvm", "ap-test", "ins-1", "host-1", "test", "203.0.113.1", "true")
+        exporter.TIMESTAMPED_BUSINESS_METRICS.update(
+            "cloud_network_public_transmit_mbps", labels, 12.5, 1700000000
+        )
+        exposition = generate_latest().decode()
+        self.assertIn(
+            'cloud_network_public_transmit_mbps{cloud="tencent",env="test",host="host-1",instance_id="ins-1",product="cvm",public_ip="203.0.113.1",region="ap-test",source_timestamped="true"} 12.5 1700000000000',
+            exposition,
         )
 
 

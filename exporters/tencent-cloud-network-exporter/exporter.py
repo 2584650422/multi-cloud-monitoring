@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import yaml
-from prometheus_client import Counter, Gauge, start_http_server
+from prometheus_client import Counter, Gauge, REGISTRY, start_http_server
+from prometheus_client.core import GaugeMetricFamily
 from tencentcloud.common import credential
 from tencentcloud.common.profile.client_profile import ClientProfile
 from tencentcloud.common.profile.http_profile import HttpProfile
@@ -39,21 +40,51 @@ MAX_INSTANCES_PER_REQUEST = 50
 METRICS_PER_GROUP = 3
 
 
-PUBLIC_RECEIVE_MBPS = Gauge(
-    "cloud_network_public_receive_mbps",
-    "Public network receive bandwidth in megabits per second.",
-    LABELS,
-)
-PUBLIC_TRANSMIT_MBPS = Gauge(
-    "cloud_network_public_transmit_mbps",
-    "Public network transmit bandwidth in megabits per second.",
-    LABELS,
-)
-PUBLIC_EGRESS_UTILIZATION_RATIO = Gauge(
-    "cloud_network_public_egress_utilization_ratio",
-    "Public network egress bandwidth utilization as a ratio from 0 to 1.",
-    LABELS,
-)
+BUSINESS_METRIC_LABELS = (*LABELS, "source_timestamped")
+
+
+BUSINESS_METRICS = {
+    "cloud_network_public_receive_mbps": (
+        "Public network receive bandwidth in megabits per second.",
+    ),
+    "cloud_network_public_transmit_mbps": (
+        "Public network transmit bandwidth in megabits per second.",
+    ),
+    "cloud_network_public_egress_utilization_ratio": (
+        "Public network egress bandwidth utilization as a ratio from 0 to 1.",
+    ),
+}
+
+
+class TimestampedBusinessMetrics:
+    """Expose Tencent bandwidth samples with their source timestamps."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.samples: dict[str, dict[tuple[str, ...], tuple[float, int]]] = {
+            name: {} for name in BUSINESS_METRICS
+        }
+
+    def update(
+        self, metric: str, labels: tuple[str, ...], value: float, timestamp: int
+    ) -> None:
+        with self.lock:
+            self.samples[metric][labels] = (value, timestamp)
+
+    def collect(self) -> Iterable[GaugeMetricFamily]:
+        with self.lock:
+            snapshot = {
+                name: values.copy() for name, values in self.samples.items()
+            }
+        for name, (documentation,) in BUSINESS_METRICS.items():
+            family = GaugeMetricFamily(name, documentation, labels=BUSINESS_METRIC_LABELS)
+            for labels, (value, timestamp) in snapshot[name].items():
+                family.add_metric(labels, value, timestamp=timestamp)
+            yield family
+
+
+TIMESTAMPED_BUSINESS_METRICS = TimestampedBusinessMetrics()
+REGISTRY.register(TIMESTAMPED_BUSINESS_METRICS)
 METRIC_TIMESTAMP = Gauge(
     "cloud_network_metric_timestamp_seconds",
     "Timestamp of the Tencent Cloud data point currently exposed.",
@@ -296,14 +327,14 @@ class TencentCollector:
     ) -> None:
         spec = PRODUCTS[product]
         metric_jobs = (
-            (spec.receive_metric, PUBLIC_RECEIVE_MBPS, spec.bandwidth_multiplier, "receive"),
-            (spec.transmit_metric, PUBLIC_TRANSMIT_MBPS, spec.bandwidth_multiplier, "transmit"),
-            (spec.utilization_metric, PUBLIC_EGRESS_UTILIZATION_RATIO, 0.01, "egress_utilization"),
+            (spec.receive_metric, "cloud_network_public_receive_mbps", spec.bandwidth_multiplier, "receive"),
+            (spec.transmit_metric, "cloud_network_public_transmit_mbps", spec.bandwidth_multiplier, "transmit"),
+            (spec.utilization_metric, "cloud_network_public_egress_utilization_ratio", 0.01, "egress_utilization"),
         )
         group_labels = ("tencent", product, region)
         successful = True
 
-        for metric_name, gauge, multiplier, exported_metric in metric_jobs:
+        for metric_name, exported_metric, multiplier, timestamp_metric in metric_jobs:
             try:
                 values: dict[str, tuple[float, int]] = {}
                 for batch in chunks(instances, MAX_INSTANCES_PER_REQUEST):
@@ -321,8 +352,10 @@ class TencentCollector:
                         )
                         continue
                     value, timestamp = point
-                    gauge.labels(*instance.labels()).set(value * multiplier)
-                    METRIC_TIMESTAMP.labels(*instance.labels(), exported_metric).set(timestamp)
+                    TIMESTAMPED_BUSINESS_METRICS.update(
+                        exported_metric, (*instance.labels(), "true"), value * multiplier, timestamp
+                    )
+                    METRIC_TIMESTAMP.labels(*instance.labels(), timestamp_metric).set(timestamp)
             except Exception:
                 successful = False
                 LOG.exception(
